@@ -1,0 +1,45 @@
+:root {
+    --bg: #f9f9f9;
+    --card-bg: #fff;
+    --accent: #4f46e5;
+    --border-radius: 12px;
+    --shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Root container */
+/* assets/style.css */
+.app-container {
+  font-family: sans-serif;
+  background-color: #fafafa;
+  padding: 20px;
+  height: 100vh;
+}
+
+/* Make columns side by side */
+.row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 20px;
+  height: 100%;
+}
+
+/* Left control panel */
+.col-left {
+  flex: 1;
+  background-color: #f4f4f4;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 0 5px rgba(0,0,0,0.1);
+  min-width: 200px;
+}
+
+/* Right visualization area */
+.col-right {
+  flex: 3;
+  background-color: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 0 5px rgba(0,0,0,0.1);
+}
