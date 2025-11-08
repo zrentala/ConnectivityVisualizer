@@ -1,0 +1,104 @@
+{
+  "build": "hab6afd1_0",
+  "build_number": 0,
+  "channel": "https://repo.anaconda.com/pkgs/main/osx-arm64",
+  "constrains": [],
+  "depends": [
+    "__osx >=12.1",
+    "ncurses >=6.5,<7.0a0",
+    "readline >=8.3,<9.0a0",
+    "zlib >=1.2.13,<2.0a0"
+  ],
+  "extracted_package_dir": "/opt/homebrew/Caskroom/miniconda/base/pkgs/sqlite-3.51.0-hab6afd1_0",
+  "features": "",
+  "files": [
+    "bin/sqlite3",
+    "include/sqlite3.h",
+    "include/sqlite3ext.h",
+    "lib/libsqlite3.0.dylib",
+    "lib/libsqlite3.3.51.0.dylib",
+    "lib/libsqlite3.dylib",
+    "lib/pkgconfig/sqlite3.pc",
+    "share/man/man1/sqlite3.1"
+  ],
+  "fn": "sqlite-3.51.0-hab6afd1_0.conda",
+  "legacy_bz2_md5": "68ebcf5a908c968c08b03da51d4ccaa8",
+  "license": "blessing",
+  "license_family": "Other",
+  "link": {
+    "source": "/opt/homebrew/Caskroom/miniconda/base/pkgs/sqlite-3.51.0-hab6afd1_0",
+    "type": 1
+  },
+  "md5": "cb7ca9cd0fafcac266f32356e28a4928",
+  "name": "sqlite",
+  "package_tarball_full_path": "/opt/homebrew/Caskroom/miniconda/base/pkgs/sqlite-3.51.0-hab6afd1_0.conda",
+  "paths_data": {
+    "paths": [
+      {
+        "_path": "bin/sqlite3",
+        "path_type": "hardlink",
+        "sha256": "9fd52d7414383bd36bbc3537f41973e9bb8bcbe5257dd976e7f5b6c4a615117f",
+        "sha256_in_prefix": "9fd52d7414383bd36bbc3537f41973e9bb8bcbe5257dd976e7f5b6c4a615117f",
+        "size_in_bytes": 2026208
+      },
+      {
+        "_path": "include/sqlite3.h",
+        "path_type": "hardlink",
+        "sha256": "05c48cbf0a0d7bda2b6d0145ac4f2d3a5e9e1cb98b5d4fa9d88ef620e1940046",
+        "sha256_in_prefix": "05c48cbf0a0d7bda2b6d0145ac4f2d3a5e9e1cb98b5d4fa9d88ef620e1940046",
+        "size_in_bytes": 671792
+      },
+      {
+        "_path": "include/sqlite3ext.h",
+        "path_type": "hardlink",
+        "sha256": "ea81fb7bd05882e0e0b92c4d60f677b205f7f1fbf085f218b12f0b5b3f0b9e48",
+        "sha256_in_prefix": "ea81fb7bd05882e0e0b92c4d60f677b205f7f1fbf085f218b12f0b5b3f0b9e48",
+        "size_in_bytes": 38632
+      },
+      {
+        "_path": "lib/libsqlite3.0.dylib",
+        "path_type": "softlink",
+        "sha256": "22538dbb70c50378ff94bc32097608faac4eb352e9d1bef8ed1868c2cc33dfc5",
+        "size_in_bytes": 1499008
+      },
+      {
+        "_path": "lib/libsqlite3.3.51.0.dylib",
+        "path_type": "hardlink",
+        "sha256": "22538dbb70c50378ff94bc32097608faac4eb352e9d1bef8ed1868c2cc33dfc5",
+        "sha256_in_prefix": "22538dbb70c50378ff94bc32097608faac4eb352e9d1bef8ed1868c2cc33dfc5",
+        "size_in_bytes": 1499008
+      },
+      {
+        "_path": "lib/libsqlite3.dylib",
+        "path_type": "softlink",
+        "sha256": "22538dbb70c50378ff94bc32097608faac4eb352e9d1bef8ed1868c2cc33dfc5",
+        "size_in_bytes": 1499008
+      },
+      {
+        "_path": "lib/pkgconfig/sqlite3.pc",
+        "file_mode": "text",
+        "path_type": "hardlink",
+        "prefix_placeholder": "/opt/miniconda3/conda-bld/sqlite_1762524994579/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_p",
+        "sha256": "e92104d017be55add01988021e76e91dea64e3ab3636aee46edaf33d6145142b",
+        "sha256_in_prefix": "0b054733530a71855ddc3808abb7abfc448efc6996a94620ab8d0374f7596393",
+        "size_in_bytes": 515
+      },
+      {
+        "_path": "share/man/man1/sqlite3.1",
+        "path_type": "hardlink",
+        "sha256": "1edbafb8886b64e5e72ca559d306f5ee63356cbf1059f72e908b66d1e231c46e",
+        "sha256_in_prefix": "1edbafb8886b64e5e72ca559d306f5ee63356cbf1059f72e908b66d1e231c46e",
+        "size_in_bytes": 5315
+      }
+    ],
+    "paths_version": 1
+  },
+  "requested_spec": "None",
+  "sha256": "8164ef0277b10e5bf8bbf3207a3d1b2fec66d47c33e29996e057e00f9faa4940",
+  "size": 1192365,
+  "subdir": "osx-arm64",
+  "timestamp": 1762525029950,
+  "track_features": "",
+  "url": "https://repo.anaconda.com/pkgs/main/osx-arm64/sqlite-3.51.0-hab6afd1_0.conda",
+  "version": "3.51.0"
+}
