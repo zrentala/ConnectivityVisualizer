@@ -7,15 +7,20 @@ class Simulation:
     def __init__(self, cfg):
         self.n_elec = cfg.get('n_elec', 10)
         self.is_directed = cfg.get('directed', False)
-        self.conn_matrix = self.generate_conn()
+        self.conn_matrices = self.generate_conn(n_mat=cfg.get('n_mat', 1))
         self.locations = self.generate_locs()
 
-    def generate_conn(self):
-        conn = np.random.rand(self.n_elec, self.n_elec)
-        if not self.is_directed:
-            conn = (conn + conn.T) / 2
-        np.fill_diagonal(conn, 0)
-        return conn
+    def generate_conn(self, n_mat: int) -> np.ndarray:
+        conns = np.empty((n_mat, self.n_elec, self.n_elec), dtype=float)
+
+        for i in range(n_mat):
+            conn = np.random.rand(self.n_elec, self.n_elec)
+            if not self.is_directed:
+                conn = (conn + conn.T) / 2
+            np.fill_diagonal(conn, 0)
+            conns[i] = conn
+
+        return conns
 
     def generate_locs(self):
         phi = np.random.uniform(0, np.pi * 2, self.n_elec)
