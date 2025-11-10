@@ -330,6 +330,96 @@ class ConnectivityVisualizer:
             title=title or "3D Connectivity"
         )
         return fig
+    
+    def figure_heatmap(
+        self,
+        *,
+        threshold: float = 0.0,
+        center_zero: bool = False,
+        colorscale: str = "RdBu",
+        title: Optional[str] = None,
+        showscale: bool = True,
+        bg_color: str = "rgba(230,230,230,0.3)"  # faint gray grid background
+    ) -> go.Figure:
+        """
+        Connectivity heatmap (n x n) with faint empty grid rectangles for missing/thresholded cells.
+        """
+        C = np.array(self.conn, dtype=float)
+
+        # Threshold small values
+        if threshold > 0:
+            mask = np.abs(C) < threshold
+            C = C.copy()
+            C[mask] = np.nan
+
+        # Color range
+        if center_zero:
+            max_abs = np.nanmax(np.abs(C)) if np.any(np.isfinite(C)) else 1.0
+            zmin, zmax = -max_abs, max_abs
+        else:
+            if np.any(np.isfinite(C)):
+                zmin, zmax = float(np.nanmin(C)), float(np.nanmax(C))
+                if zmin == zmax:
+                    zmin, zmax = zmin - 1e-6, zmax + 1e-6
+            else:
+                zmin, zmax = -1.0, 1.0
+
+        # --- Background layer: faint grid of boxes ---
+        bg = np.full_like(C, np.nan)
+        bg[np.isnan(C)] = 0  # only fill where data is missing
+
+        fig = go.Figure()
+
+        fig.add_trace(go.Heatmap(
+            z=bg,
+            x=self.labels,
+            y=self.labels,
+            colorscale=[[0, bg_color], [1, bg_color]],  # constant faint gray
+            showscale=False,
+            xgap=0.5,
+            ygap=0.5,
+            hoverinfo="skip"
+        ))
+
+        # --- Main heatmap ---
+        fig.add_trace(go.Heatmap(
+            z=C,
+            x=self.labels,
+            y=self.labels,
+            colorscale=colorscale,
+            zmin=zmin,
+            zmax=zmax,
+            xgap=0.5,
+            ygap=0.5,
+            colorbar=dict(title="Conn") if showscale else None,
+            showscale=showscale,
+            hovertemplate="From %{y}<br>To %{x}<br>Value=%{z:.3f}<extra></extra>",
+        ))
+
+        # Layout styling
+        fig.update_layout(
+            title=title or "Connectivity Heatmap",
+            xaxis=dict(
+                title="To",
+                tickangle=45,
+                showgrid=False,
+                zeroline=False,
+            ),
+            yaxis=dict(
+                title="From",
+                autorange="reversed",
+                showgrid=False,
+                zeroline=False,
+            ),
+            autosize=True,
+            margin=dict(l=60, r=20, t=40, b=80),
+            plot_bgcolor="white",
+        )
+
+        return fig
+
+
+
 
     # ---------- Convenience utilities ----------
     def subset(self, nodes: Iterable[int]) -> "ConnectivityVisualizer":
