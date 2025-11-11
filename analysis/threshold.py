@@ -1,5 +1,5 @@
 import numpy as np
-import statisticaltests as tests
+import analysis.statisticaltests as tests
 from scipy.sparse.csgraph import minimum_spanning_tree
 
 def get_basic_map(conn_mat: np.array, threshold:float):
