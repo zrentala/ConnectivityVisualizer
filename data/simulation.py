@@ -2,6 +2,8 @@
 from pathlib import Path
 import numpy as np
 from utils import io # import your io module
+import mne
+import pyvista as pv
 
 class Simulation:
     def __init__(self, cfg):
@@ -39,3 +41,19 @@ class Simulation:
         folder.mkdir(exist_ok=True)
         io.save_connectivity(folder / "conn.npy", self.conn_matrix)
         io.save_locations(folder / "locs.csv", self.locations)
+
+    def build_brain_mesh(self) -> pv.PolyData:
+        fs_dir = mne.datasets.fetch_fsaverage(verbose=True)
+        lh_pial = fs_dir / "surf" / "lh.pial"
+        rh_pial = fs_dir / "surf" / "rh.pial"
+
+        coords_lh, faces_lh = mne.read_surface(lh_pial)
+        coords_rh, faces_rh = mne.read_surface(rh_pial)
+
+        faces_lh_vtk = np.column_stack((np.full(len(faces_lh), 3), faces_lh))
+        faces_rh_vtk = np.column_stack((np.full(len(faces_rh), 3), faces_rh + len(coords_lh)))
+
+        coords_combined = np.vstack((coords_lh, coords_rh))
+        faces_combined  = np.vstack((faces_lh_vtk, faces_rh_vtk))
+
+        return pv.PolyData(coords_combined, faces_combined)

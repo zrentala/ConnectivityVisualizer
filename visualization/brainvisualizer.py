@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
+import analysis.threshold as thresh
+
 try:
     import pyvista as pv
 except Exception:  # make pv optional
@@ -28,7 +30,7 @@ class ConnectivityVisualizer:
     """
     conn: np.ndarray
     chanlocs: Union[pd.DataFrame, Iterable[Channel], np.ndarray, list]
-    brain_mesh: Optional["pv.PolyData"] = None
+    brain_mesh: Optional[object] = None
 
     # derived / cached
     n: int = field(init=False)

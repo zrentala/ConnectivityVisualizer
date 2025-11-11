@@ -1,22 +1,23 @@
 from dash import html, dcc
 import dash_bootstrap_components as dbc
+from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class VizConfig:
-    graph_height: str = "40vh"
+    graph_height: str = "70vh"
     id_prefix: str = "viz"
 
 
 class VizTabsBuilder:
     def __init__(self, config: VizConfig | None = None):
         self.config = config or VizConfig()
-        self._id_map: Dict[str, str] = {}
+        self._id_map = {}
 
     def graph_id(self, label: str) -> str:
         key = label.lower().replace(" ", "-")
         return f"{self.config.id_prefix}-{key}"
 
-    def create_viz_tabs(self, viz_dict: Dict[str, go.Figure]) -> dbc.Card:
+    def create_viz_tabs(self, viz_dict) -> dbc.Card:
         """
         viz_dict: {label: figure}
         """
@@ -41,7 +42,7 @@ class VizTabsBuilder:
         return dbc.Card(dbc.Tabs(tabs))
 
     @property
-    def id_map(self) -> Dict[str, str]:
+    def id_map(self):
         return dict(self._id_map)
 
 def create_slider(id: str, n_frames: int, label: str = "Frame") -> html.Div:
@@ -57,7 +58,7 @@ def create_slider(id: str, n_frames: int, label: str = "Frame") -> html.Div:
                 value=0,
                 updatemode="drag",
                 tooltip={"placement": "bottom", "always_visible": True},
-                marks={0: "0", n_frames - 1: str(n_frames - 1)} if n_mat > 1 else None,
+                marks={0: "0", n_frames - 1: str(n_frames - 1)} if n_frames > 1 else None,
             ),
             html.Small(id="frame-label", className="text-muted"),
         ],
