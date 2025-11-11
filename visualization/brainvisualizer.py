@@ -150,10 +150,31 @@ class ConnectivityVisualizer:
         return pts[:, 0], pts[:, 1], pts[:, 2]
 
     # ---------- Public API ----------
+    def apply_threshold(self, threshold_type: str = "Basic", threshold_value: float = 50.0) -> np.ndarray:
+        """
+        Apply thresholding to the connectivity matrix.
+        
+        Args:
+            threshold_type: Either "Basic" or "Minimum Spanning Tree"
+            threshold_value: Percentile threshold for basic thresholding (0-100)
+        
+        Returns:
+            Boolean mask of thresholded connections
+        """
+        conn_normalized = (self.conn - np.min(self.conn)) / (np.max(self.conn) - np.min(self.conn) + 1e-12)
+        
+        if threshold_type == "Basic":
+            # Convert percentage to normalized threshold
+            norm_threshold = threshold_value / 100.0
+            return thresh.get_basic_map(conn_normalized, norm_threshold)
+        else:  # Minimum Spanning Tree
+            return thresh.get_mst_map(self.conn)
+    
     def figure_2d(
         self,
         *,
-        threshold: float = 0.9,
+        threshold: float = 0.0,
+        threshold_type: Optional[str] = None,
         directed: bool = True,
         use_arcs: bool = True,
         curvature: float = 0.25,
@@ -169,9 +190,19 @@ class ConnectivityVisualizer:
     ) -> go.Figure:
         """
         Interactive 2D EEG-style top view.
+        
+        Args:
+            threshold: Basic threshold value (absolute) or percentage (if threshold_type is set)
+            threshold_type: If set to "Basic" or "Minimum Spanning Tree", applies that thresholding
         """
         C = self.conn.copy()
         np.fill_diagonal(C, 0.0)
+        
+        # Apply thresholding if specified
+        if threshold_type:
+            mask = self.apply_threshold(threshold_type, threshold)
+            C = C * mask
+        
         scale = self._max_conn_scale(C)
         x, y = self.xy_topo[:, 0], self.xy_topo[:, 1]
         labels = self.labels
@@ -248,11 +279,12 @@ class ConnectivityVisualizer:
         self,
         *,
         threshold: float = 0.9,
+        threshold_type: Optional[str] = None,
         show_labels: bool = True,
         electrode_size: float = 4.5,
         edge_style: str = "arc",              # "arc" or "straight"
         arc_radius: Optional[float] = None,   # None -> automatic radius; set a float to force
-        arc_samples: int = 24,
+        arc_samples: int = 1,  # Reduced from 24 for faster rendering
         line_width: float = 3.0,
         opacity: float = 0.6,
         title: Optional[str] = None,
@@ -261,8 +293,20 @@ class ConnectivityVisualizer:
         Interactive 3D connectivity. If edge_style == 'arc', edges curve in the plane
         defined by (p0, p1, origin). If arc_radius is None, a gentle automatic radius
         is chosen per edge; otherwise your fixed radius is used.
+        
+        Args:
+            threshold: Threshold value (absolute) or percentage (if threshold_type is set)
+            threshold_type: If set to "Basic" or "Minimum Spanning Tree", applies that thresholding
         """
         assert edge_style in ("arc", "straight")
+        
+        # Get connectivity matrix (potentially thresholded)
+        C = self.conn.copy()
+        if threshold_type:
+            mask = self.apply_threshold(threshold_type, threshold)
+            C = C * mask
+        
+        np.fill_diagonal(C, 0.0)
 
         fig = go.Figure()
 
@@ -296,8 +340,8 @@ class ConnectivityVisualizer:
         for i in range(self.n):
             p0 = self.xyz[i]
             for j in range(i + 1, self.n):
-                w = float(self.conn[i, j])
-                if not np.isfinite(w) or w < threshold:
+                w = float(C[i, j])
+                if not np.isfinite(w) or w < 1e-12:  # Skip near-zero connections
                     continue
                 p1 = self.xyz[j]
                 if edge_style == "arc":
@@ -337,6 +381,7 @@ class ConnectivityVisualizer:
         self,
         *,
         threshold: float = 0.0,
+        threshold_type: Optional[str] = None,
         center_zero: bool = False,
         colorscale: str = "RdBu",
         title: Optional[str] = None,
@@ -345,11 +390,19 @@ class ConnectivityVisualizer:
     ) -> go.Figure:
         """
         Connectivity heatmap (n x n) with faint empty grid rectangles for missing/thresholded cells.
+        
+        Args:
+            threshold: Threshold value (absolute) or percentage (if threshold_type is set)
+            threshold_type: If set to "Basic" or "Minimum Spanning Tree", applies that thresholding
         """
         C = np.array(self.conn, dtype=float)
 
-        # Threshold small values
-        if threshold > 0:
+        # Apply advanced thresholding if specified
+        if threshold_type:
+            mask = self.apply_threshold(threshold_type, threshold)
+            C = C * mask
+        # Otherwise apply basic absolute thresholding
+        elif threshold > 0:
             mask = np.abs(C) < threshold
             C = C.copy()
             C[mask] = np.nan
