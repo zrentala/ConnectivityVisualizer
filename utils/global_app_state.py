@@ -1,5 +1,6 @@
 from data.simulation import Simulation
 import dash_bootstrap_components as dbc
+from visualization.brainvisualizer import ConnectivityVisualizer
 from dash import Dash
 import pandas as pd
 
@@ -23,6 +24,7 @@ class GlobalAppState:
         )
 
         self.brain_mesh = self.data.build_brain_mesh()
+        self.viz = ConnectivityVisualizer(self.data, self.chanlocs, self.brain_mesh)
         # self.thresh_type = "Basic"
         
         # No pre-computed figures - they are generated on demand in callbacks

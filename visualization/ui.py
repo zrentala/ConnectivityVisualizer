@@ -17,6 +17,7 @@ def create_layout(n_mat, initial_fig):
             html.H4("Visualization Controls"),
             viz_controls,
             animation_slider,
+            html.H4("Threshold Controls"),
             threshold_comp,
         ],
         className="bg-light p-3 rounded shadow-sm",

@@ -56,52 +56,70 @@ def create_slider(id: str, n_frames: int, label: str = "Frame") -> html.Div:
                 max=max(n_frames - 1, 0),
                 step=1,
                 value=0,
-                updatemode="drag",
+                updatemode="mouseup",
                 tooltip={"placement": "bottom", "always_visible": True},
                 marks={0: "0", n_frames: str(n_frames - 1)} if n_frames > 1 else None,
             ),
         ],
-        className="mb-3",
+        className="m-3",
     )
 
 def create_thesh_component(id: str, label: str = "Threshold") -> html.Div:
     def _create_stat_test_component(id: str) -> html.Div:
+        test_type_options = [{"label": "t-test", "value": "t"},
+            {"label": "z-test", "value": "z"},
+            {"label": "Wilcoxon", "value": "wilcoxon"},
+            {"label": "Permutation w/o Correction", "value": "permutation w/o correction"},
+            {"label": "Permutation with FDR Correction", "value": "permutation w correction"}
+        ]
+        test_type_dropdown = create_dropdown(
+            id=f"{id}-test-type",
+            options=test_type_options,
+            label="Statistical Test Type",
+            default="t",
+        )
         return html.Div(
             [
-                dbc.Label("Statistical Test Options"),
-                dcc.Dropdown(
-                    id=f"{id}-test-type",
-                    options=[
-                        {"label": "t-test", "value": "t"},
-                        {"label": "Wilcoxon", "value": "wilcoxon"},
-                    ],
-                    value="t",
-                    clearable=False,
+                test_type_dropdown,
+                html.Div(
+                [
+                    dbc.Label("Alpha Level (%)"),
+                    dcc.Slider(
+                        id=f"{id}-alpha-slider",
+                        min=0,
+                        max=max(10 - 1, 0),
+                        step=0.1,
+                        value=0,
+                        updatemode="mouseup",
+                        tooltip={"placement": "bottom", "always_visible": True},
+                        marks={0: "0", 10: str(10 - 1)} if 10 > 1 else None,
+                    ),
+                ],
+                className="m-3"
                 ),
-                create_slider(
-                    id=f"{id}-alpha",
-                    n_frames=100,
-                    label="Alpha Value (%)"
-                )
             ],
             className="mt-2",
         )
     stat_test_component = _create_stat_test_component(id)
 
+    thresh_dropdown_options = [
+        {"label":"Basic", "value": "Basic"},
+        {"label":"MST", "value": "Minimum Spanning Tree"},
+        {"label":"Statistical Test", "value": "Statistical Test"}
+    ]
+
+    thresh_dropdown = create_dropdown(
+        id=f'{id}-type-dropdown',
+        options=thresh_dropdown_options,
+        label="Threshold Type",
+        default="Basic",
+    )
+
     """Create a threshold input component with optional slider."""
-    return html.Div(
-        [
+    return dbc.Container(
+        children =[
             dbc.Label(label),
-            dcc.Dropdown(
-                id=id,
-                options=[
-                    {"label":"Basic", "value": "Basic"},
-                    {"label":"MST", "value": "Minimum Spanning Tree"},
-                    {"label":"Statistical Test", "value": "Statistical Test"}
-                ],
-                value="Basic",
-                clearable=False,
-            ),
+            thresh_dropdown,
             html.Div(
                 id=f"{id}-slider-container",
                 children=[
@@ -115,7 +133,7 @@ def create_thesh_component(id: str, label: str = "Threshold") -> html.Div:
                 className="mt-2",
             ),
         ],
-        className="mb-3",
+        className="p-3 my-3 rounded shadow-sm border border-dark",
     )
 
 def create_dropdown(id: str, options: list[dict], label: str = "Select Option", default: str = None) -> html.Div:
