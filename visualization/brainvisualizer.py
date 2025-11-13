@@ -127,13 +127,9 @@ class ConnectivityVisualizer:
     """
     One object to hold data + build both interactive 2D and 3D connectivity figures.
     """
-    conn: np.ndarray
-    chanlocs: Union[pd.DataFrame, Iterable[Channel], np.ndarray, list]
-    brain_mesh: Optional[object] = None
     conn_idx: int = 0
     threshold: float = 0.5
     threshold_type: Optional[str] = None
-    directed: bool = True  
     colorscale: str = "Viridis"
     alpha: float = 5.0
     conn_min: float = 0.0
@@ -146,8 +142,6 @@ class ConnectivityVisualizer:
     node_edge: str = "black",
 
     # derived / cached
-    n: int = field(init=False)
-    labels: np.ndarray = field(init=False)
     xyz: np.ndarray = field(init=False)      # (n, 3)
     xy_topo: np.ndarray = field(init=False)  # (n, 2) normalized to head circle
 
