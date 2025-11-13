@@ -131,6 +131,19 @@ class ConnectivityVisualizer:
     chanlocs: Union[pd.DataFrame, Iterable[Channel], np.ndarray, list]
     brain_mesh: Optional[object] = None
     conn_idx: int = 0
+    threshold: float = 0.5
+    threshold_type: Optional[str] = None
+    directed: bool = True  
+    colorscale: str = "Viridis"
+    alpha: float = 5.0
+    conn_min: float = 0.0
+    conn_max: float = 1.0
+    node_size: float = 10.0
+    show_labels: bool = True
+    default_pos_color: str = "red",
+    default_neg_color: str = "blue",
+    node_fill: str = "lightgreen",
+    node_edge: str = "black",
 
     # derived / cached
     n: int = field(init=False)
@@ -277,24 +290,11 @@ class ConnectivityVisualizer:
     def figure_2d(
         self,
         *,
-        threshold: float = 0.0,
-        threshold_type: Optional[str] = None,
-        directed: bool = True,
         use_arcs: bool = True,
         curvature: float = 0.25,
         lw_min: float = 0.5,
         lw_max: float = 4.0,
-        pos_color: str = "red",
-        neg_color: str = "blue",
-        node_fill: str = "lightgreen",
-        node_edge: str = "black",
-        node_size: float = 10.0,
-        show_labels: bool = True,
         title: Optional[str] = None,
-        conn_min: float = 0.0,
-        conn_max: float = 1.0,
-        colorscale: str = "Viridis",
-        alpha: float = 5.0,
     ) -> go.Figure:
         """
         Interactive 2D EEG-style top view.
