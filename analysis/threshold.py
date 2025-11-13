@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.sparse.csgraph import minimum_spanning_tree
 from scipy.stats import ttest_1samp, norm, zscore, wilcoxon
-
+from typing import Union, Tuple
 
 from statsmodels.stats.multitest import multipletests
      
@@ -112,15 +112,18 @@ def perm_test_between_groups(ctrl_stack: np.ndarray, action_stack: np.ndarray, n
     return p_values
 
 
-def get_statmap_mask(conn_mat: np.array, alpha: float = 0.05, test: str = "t", n_permutations: int = 1000) -> np.array:
+def get_stattest_mask(conn_mat: np.array, alpha: float = 0.05, test: str = "t", n_permutations: int = 1000) -> np.array:
     """Compatibility wrapper: return boolean mask (p < alpha) using get_stattest_map p-values.
 
     Supports passing a tuple/list (ctrl_stack, action_stack) when using `test='permutation'`.
     """
+    print(conn_mat)
     pvals = get_stattest_map(conn_mat, alpha=alpha, test=test, n_permutations=n_permutations)
+    print(pvals)
+    print(pvals < alpha)
     return (pvals < alpha).astype(bool)
 
-def get_stattest_map(conn_mat: np.array | tuple, alpha: float = 0.05, test: str = "t", n_permutations: int = 1000) -> np.array:
+def get_stattest_map(conn_mat: Union[np.ndarray, Tuple[np.ndarray, np.ndarray]], alpha: float = 0.05, test: str = "t", n_permutations: int = 1000) -> np.array:
     """
     Compute p-values for statistical tests applied to connectivity data.
 
@@ -137,7 +140,7 @@ def get_stattest_map(conn_mat: np.array | tuple, alpha: float = 0.05, test: str 
     arr = np.asarray(conn_mat)
 
     # If caller provided a tuple/list for two-sample permutation testing, handle that
-    if isinstance(conn_mat, (list, tuple)) and test == 'permutation':
+    if isinstance(conn_mat, (list, tuple)) and test == 'permutation w/o correction' or test == 'permutation w correction':
         # expect (ctrl_stack, action_stack) where each is (n_samples, n_elec, n_elec) or (n_samples, n_features)
         ctrl, action = conn_mat
         ctrl_arr = np.asarray(ctrl)
@@ -190,9 +193,11 @@ def get_stattest_map(conn_mat: np.array | tuple, alpha: float = 0.05, test: str 
                 p_vals.append(np.nan)
         p_values = np.asarray(p_vals)
 
-    elif test == "permutation":
+    elif test == "permutation w/o correction":
         # _permutation_test returns (None, p_values)
         _, p_values = _permutation_test(flat, popmean=0, axis=0, n_permutations=n_permutations, correct_alpha=False)
+    elif test == "permutation w correction":
+        _, p_values = _permutation_test(flat, popmean=0, axis=0, n_permutations=n_permutations, correct_alpha=True)
 
     else:
         raise ValueError(f"Unsupported statistical test: {test}")

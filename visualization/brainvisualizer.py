@@ -130,6 +130,7 @@ class ConnectivityVisualizer:
     conn: np.ndarray
     chanlocs: Union[pd.DataFrame, Iterable[Channel], np.ndarray, list]
     brain_mesh: Optional[object] = None
+    conn_idx: int = 0
 
     # derived / cached
     n: int = field(init=False)
@@ -249,7 +250,7 @@ class ConnectivityVisualizer:
         return pts[:, 0], pts[:, 1], pts[:, 2]
 
     # ---------- Public API ----------
-    def apply_threshold(self, threshold_type: str = "Basic", threshold_value: float = 50.0) -> np.ndarray:
+    def apply_threshold(self, threshold_type: str = "Basic", threshold_value: float = 50.0, alpha: float = 5.0) -> np.ndarray:
         """
         Apply thresholding to the connectivity matrix.
         
@@ -266,7 +267,11 @@ class ConnectivityVisualizer:
             # Convert percentage to normalized threshold
             norm_threshold = threshold_value / 100.0
             return thresh.get_basic_map(conn_normalized, norm_threshold)
-        else:  # Minimum Spanning Tree
+        elif threshold_type == "Statistical Test":
+            # Convert percentage to normalized threshold
+            norm_alpha = alpha / 100.0
+            return thresh.get_stattest_mask(self.conn, norm_alpha)
+        elif threshold_type == "MST":  # Minimum Spanning Tree
             return thresh.get_mst_map(self.conn)
     
     def figure_2d(
@@ -289,6 +294,7 @@ class ConnectivityVisualizer:
         conn_min: float = 0.0,
         conn_max: float = 1.0,
         colorscale: str = "Viridis",
+        alpha: float = 5.0,
     ) -> go.Figure:
         """
         Interactive 2D EEG-style top view.
@@ -303,7 +309,7 @@ class ConnectivityVisualizer:
         # Apply thresholding if specified
         if threshold_type:
             # apply_threshold expects threshold as percentage when threshold_type == 'Basic'
-            mask = self.apply_threshold(threshold_type, threshold)
+            mask = self.apply_threshold(threshold_type, threshold, alpha)
             C = C * mask
         
         scale = self._max_conn_scale(C)
@@ -406,7 +412,6 @@ class ConnectivityVisualizer:
             pass
 
         fig.update_layout(
-            title=title or "Interactive 2D EEG Connectivity",
             xaxis=dict(
                 visible=False,
                 scaleanchor="y",   # lock aspect ratio
@@ -437,6 +442,7 @@ class ConnectivityVisualizer:
         conn_min: float = 0.0,
         conn_max: float = 1.0,
         colorscale: str = "Viridis",
+        alpha: float = 5.0,
     ) -> go.Figure:
         """
         Interactive 3D connectivity. If edge_style == 'arc', edges curve in the plane
@@ -452,7 +458,7 @@ class ConnectivityVisualizer:
         # Get connectivity matrix (potentially thresholded)
         C = self.conn.copy()
         if threshold_type:
-            mask = self.apply_threshold(threshold_type, threshold)
+            mask = self.apply_threshold(threshold_type, threshold, alpha)
             C = C * mask
         
         np.fill_diagonal(C, 0.0)
@@ -679,12 +685,12 @@ class ConnectivityVisualizer:
         threshold_type: Optional[str] = None,
         center_zero: bool = False,
         colorscale: str = "RdBu",
-        title: Optional[str] = None,
         showscale: bool = True,
         bg_color: str = "rgba(230,230,230,0.3)"  # faint gray grid background
         ,
         conn_min: float = 0.0,
         conn_max: float = 1.0,
+        alpha: float = 5.0,
     ) -> go.Figure:
         """
         Connectivity heatmap (n x n) with faint empty grid rectangles for missing/thresholded cells.
@@ -697,7 +703,7 @@ class ConnectivityVisualizer:
 
         # Apply advanced thresholding if specified
         if threshold_type:
-            mask = self.apply_threshold(threshold_type, threshold)
+            mask = self.apply_threshold(threshold_type, threshold, alpha)
             C = C * mask
         # Otherwise apply basic absolute thresholding
         elif threshold > 0:
@@ -756,7 +762,6 @@ class ConnectivityVisualizer:
 
         # Layout styling
         fig.update_layout(
-            title=title or "Connectivity Heatmap",
             xaxis=dict(
                 title="To",
                 tickangle=45,

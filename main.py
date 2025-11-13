@@ -16,7 +16,7 @@ from utils.global_app_state import GlobalAppState
 
 def create_app(global_state: GlobalAppState) -> Dash:  
     """Create and initialize the Dash application."""
-    app = Dash(__name__, external_stylesheets=[dbc.themes.CYBORG])
+    app = Dash(__name__, external_stylesheets=[dbc.themes.CYBORG], suppress_callback_exceptions=True)
     n_mat = global_state.data.conn_matrices.shape[0]
     
     # Create initial 2D figure for display
