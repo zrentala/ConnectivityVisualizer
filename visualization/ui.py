@@ -1,62 +1,76 @@
 # visualization/ui.py
 from dash import html, dcc
 import dash_bootstrap_components as dbc
-import interaction.ui_controls as ui_controls
-from interaction.ui_controls import create_slider, create_thesh_component
+from interaction.ui_controls import create_slider, create_thesh_component, create_viz_controls
+import dash_split_pane as dsp
+
 
 def create_layout(n_mat, initial_fig):
-    """Create the main layout with visualization type dropdown instead of tabs."""
+    """Responsive layout that fits the viewport and keeps margins/padding (no fixed pixels)."""
     animation_slider = create_slider(id="mat-idx", n_frames=n_mat, label="Connectivity Matrix Index")
     threshold_comp = create_thesh_component(id="thresh-comp", label="Threshold")
-    
-    # Visualization type dropdown
-    viz_type_dropdown = html.Div(
+    viz_controls = create_viz_controls(id_prefix="main", n_mat=n_mat)
+
+    left = html.Div(
         [
-            dbc.Label("Visualization Type"),
-            dcc.Dropdown(
-                id="viz-type-dropdown",
-                options=[
-                    {"label": "2D", "value": "2D"},
-                    {"label": "3D", "value": "3D"},
-                    {"label": "Heatmap", "value": "Heatmap"},
-                ],
-                value="2D",
-                clearable=False,
-            )
+            html.H3("Controls / Info Panel", className="mb-3"),
+            html.H4("Visualization Controls"),
+            viz_controls,
+            animation_slider,
+            threshold_comp,
         ],
-        className="mb-3",
+        className="bg-light p-3 rounded shadow-sm",
+        style={"height": "100%", "overflowY": "auto"},
     )
 
-    return dbc.Container(
+    right = html.Div(
         [
-            dbc.Row(
-                [
-                    dbc.Col(
-                        [
-                            html.H3("Controls / Info Panel", className="mb-3"),
-                            animation_slider,
-                            threshold_comp,
-                            
-                        ],
-                        width=3,
-                        className="bg-light p-3 m-3 rounded shadow-sm",
-                    ),
-                    dbc.Col(
-                        [
-                            html.H3("Brain Connectivity Visualization", className="mb-3"),
-                            viz_type_dropdown,
-                            dcc.Graph(
-                                id="main-visualization",
-                                figure=initial_fig,
-                                style={"height": "70vh"},
-                            )
-                        ],
-                        width=8,
-                        className="bg-light p-3 m-3 rounded shadow-sm",
-                    ),
-                ],
-                className="mt-3 p-3 justify-content-center",
+            html.H3("Brain Connectivity Visualization", className="mb-3"),
+            dcc.Graph(
+                id="main-visualization",
+                figure=initial_fig,
+                className="main-graph",
+                # useResizeHandler=True,
+                config={"responsive": True},
+                style={"height": "100%", "width": "100%", "flex": "1 1 auto", "minHeight": 0},
             ),
         ],
+        className="bg-light p-3 rounded shadow-sm",
+        style={"height": "100%", "overflow": "hidden", "display": "flex", "flexDirection": "column", "flex": "1 1 auto"},
+    )
+
+    split_pane = dsp.DashSplitPane(
+        id="main-split",
+        children=[left, right],
+        split="vertical",
+        size="30%",
+        minSize="20%",
+        maxSize="70%",
+        primary="first",
+        allowResize=True,
+        style={
+            "position": "relative",
+            "height": "90%",
+            "width": "90%",
+        },
+        pane1Style={"height": "100%"},
+        pane2Style={"height": "100%"},
+        resizerStyle={"cursor": "col-resize"},
+        className="rounded shadow-sm p-3 m-3 bg-light"
+    )
+
+    # The container itself uses viewport units — no fixed pixels
+    return dbc.Container(
+        split_pane,
         fluid=True,
+        style={
+            "height": "100vh",
+            "width": "100vw",
+            "overflow": "hidden",
+            "display": "flex",
+            "flexDirection": "column",
+            "margin": "0",
+            "alignItems": "center",
+            "justifyContent": "center",
+        },
     )

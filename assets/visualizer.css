@@ -1,0 +1,8 @@
+/* Ensure the app and graph can stretch to the viewport and let Plotly resize handler work */
+html, body, #root, .container, .dash-app { height: 100%; margin: 0; padding: 0; }
+
+/* Target the Graph wrapper and the actual Plotly divs */
+.main-graph, .dash-graph, #main-visualization { width: 100% !important; height: 100% !important; min-height: 0 !important; box-sizing: border-box; }
+
+/* Sometimes Plotly puts content in a .js-plotly-plot child — make sure it can shrink */
+.js-plotly-plot { min-height: 0 !important; }

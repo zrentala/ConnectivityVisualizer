@@ -5,6 +5,7 @@ from typing import Iterable, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.colors as plc
 
 import analysis.threshold as thresh
 
@@ -12,6 +13,104 @@ try:
     import pyvista as pv
 except Exception:  # make pv optional
     pv = None
+
+
+def _rgba_from_color(col: str, strength: float) -> str:
+    """Return an 'rgba(r,g,b,a)' string for a given hex or named color and strength in [0,1].
+
+    Strength controls the alpha channel; for hex colors we parse RGB. For a small set
+    of named colors we map to RGB; otherwise we fall back to the original color string
+    (which Plotly will accept) and append an alpha via rgba if possible.
+    """
+    strength = float(np.clip(strength, 0.0, 1.0))
+    if not isinstance(col, str):
+        return f"rgba(0,0,0,{strength:.3f})"
+    c = col.strip()
+    # hex form
+    if c.startswith("#") and len(c) in (7, 4):
+        try:
+            if len(c) == 7:
+                r = int(c[1:3], 16)
+                g = int(c[3:5], 16)
+                b = int(c[5:7], 16)
+            else:
+                r = int(c[1] * 2, 16)
+                g = int(c[2] * 2, 16)
+                b = int(c[3] * 2, 16)
+            return f"rgba({r},{g},{b},{strength:.3f})"
+        except Exception:
+            return c
+
+    # basic named colors fallback
+    named = {
+        "red": (255, 0, 0),
+        "blue": (0, 0, 255),
+        "black": (0, 0, 0),
+        "white": (255, 255, 255),
+        "lightgreen": (144, 238, 144),
+        "green": (0, 128, 0),
+    }
+    lc = c.lower()
+    if lc in named:
+        r, g, b = named[lc]
+        return f"rgba({r},{g},{b},{strength:.3f})"
+
+    # last resort: return original color (Plotly may accept strings like 'rgba(...)')
+    return c
+
+
+def _color_from_scale(name: str, t: float) -> str:
+    """Return an rgb hex string (e.g. '#rrggbb') sampled from the named plotly colorscale at t in [0,1].
+
+    Falls back to Viridis if the named scale isn't found. Performs linear interpolation in RGB space.
+    """
+    t = float(np.clip(t, 0.0, 1.0))
+    if not isinstance(name, str) or not name:
+        name = "Viridis"
+
+    seq = getattr(plc.sequential, name, None)
+    if seq is None or len(seq) == 0:
+        # try diverging
+        seq = getattr(plc.diverging, name, None)
+    if seq is None or len(seq) == 0:
+        # fallback
+        seq = plc.sequential.Viridis
+
+    # seq is a list of color strings (hex or rgb). Normalize to hex '#rrggbb'.
+    def _to_rgb_tuple(cstr: str):
+        s = cstr.strip()
+        if s.startswith("#"):
+            if len(s) == 7:
+                return int(s[1:3], 16), int(s[3:5], 16), int(s[5:7], 16)
+            if len(s) == 4:
+                return int(s[1]*2, 16), int(s[2]*2, 16), int(s[3]*2, 16)
+        # try 'rgb(r,g,b)'
+        if s.startswith("rgb"):
+            try:
+                inside = s[s.find("(")+1:s.find(")")]
+                parts = [int(p.strip()) for p in inside.split(",")]
+                return tuple(parts[:3])
+            except Exception:
+                pass
+        # otherwise fallback to black
+        return (0, 0, 0)
+
+    # position in scale
+    n = len(seq)
+    if n == 1:
+        r, g, b = _to_rgb_tuple(seq[0])
+        return f"rgb({r},{g},{b})"
+
+    pos = t * (n - 1)
+    i = int(np.floor(pos))
+    j = min(i + 1, n - 1)
+    frac = pos - i
+    c0 = _to_rgb_tuple(seq[i])
+    c1 = _to_rgb_tuple(seq[j])
+    r = int(round((1 - frac) * c0[0] + frac * c1[0]))
+    g = int(round((1 - frac) * c0[1] + frac * c1[1]))
+    b = int(round((1 - frac) * c0[2] + frac * c1[2]))
+    return f"rgb({r},{g},{b})"
 
 
 @dataclass
@@ -187,6 +286,9 @@ class ConnectivityVisualizer:
         node_size: float = 10.0,
         show_labels: bool = True,
         title: Optional[str] = None,
+        conn_min: float = 0.0,
+        conn_max: float = 1.0,
+        colorscale: str = "Viridis",
     ) -> go.Figure:
         """
         Interactive 2D EEG-style top view.
@@ -200,10 +302,22 @@ class ConnectivityVisualizer:
         
         # Apply thresholding if specified
         if threshold_type:
+            # apply_threshold expects threshold as percentage when threshold_type == 'Basic'
             mask = self.apply_threshold(threshold_type, threshold)
             C = C * mask
         
         scale = self._max_conn_scale(C)
+        # data range (signed) for mapping t in [0,1]
+        if np.any(np.isfinite(C)):
+            data_min = float(np.nanmin(C))
+            data_max = float(np.nanmax(C))
+        else:
+            data_min, data_max = -1.0, 1.0
+        # Map normalized conn_min/conn_max (0..1) into actual data range for colorbar limits
+        zmin = data_min + float(np.clip(conn_min, 0.0, 1.0)) * (data_max - data_min)
+        zmax = data_min + float(np.clip(conn_max, 0.0, 1.0)) * (data_max - data_min)
+        if zmin == zmax:
+            zmin, zmax = zmin - 1e-6, zmax + 1e-6
         x, y = self.xy_topo[:, 0], self.xy_topo[:, 1]
         labels = self.labels
 
@@ -222,11 +336,31 @@ class ConnectivityVisualizer:
                 if i == j:
                     continue
                 w = C[i, j]
-                if not np.isfinite(w) or abs(w) < threshold:
+                # Skip NaNs and near-zero entries
+                if not np.isfinite(w) or abs(w) < 1e-12:
                     continue
-                val = abs(w) / scale
-                width = lw_min + val * (lw_max - lw_min)
-                color = pos_color if w >= 0 else neg_color
+
+                # If threshold_type was not used, the caller may have given an absolute threshold
+                if not threshold_type and threshold > 0 and abs(w) < threshold:
+                    continue
+
+                # Signed mapping: normalize w into global [data_min,data_max] then map via conn_min/conn_max
+                t_global = (w - data_min) / (max((data_max - data_min), 1e-12))
+                try:
+                    adj = (t_global - conn_min) / max((conn_max - conn_min), 1e-12)
+                except Exception:
+                    adj = t_global
+                adj = float(np.clip(adj, 0.0, 1.0))
+
+                # Color sampled from colorscale using sign-aware adj
+                try:
+                    color = _color_from_scale(colorscale, adj)
+                except Exception:
+                    base_color = pos_color if w >= 0 else neg_color
+                    color = _rgba_from_color(base_color, max(0.12, 0.25 + 0.75 * adj))
+
+                # width reflects absolute magnitude relative to max abs
+                width = lw_min + (abs(w) / max(scale, 1e-12)) * (lw_max - lw_min)
                 p0 = self.xy_topo[i]
                 p1 = self.xy_topo[j]
                 P = self._quad_bezier(p0, p1, curvature, m=60) if use_arcs else np.vstack([p0, p1])
@@ -260,6 +394,17 @@ class ConnectivityVisualizer:
             name="Electrodes"
         ))
 
+        # colorbar: add an invisible marker trace to show colorscale for edges
+        try:
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None], mode="markers",
+                marker=dict(colorscale=colorscale, cmin=zmin, cmax=zmax, color=[zmin, zmax], showscale=True,
+                            colorbar=dict(title="Conn", len=0.45, thickness=12)),
+                showlegend=False, hoverinfo="none",
+            ))
+        except Exception:
+            pass
+
         fig.update_layout(
             title=title or "Interactive 2D EEG Connectivity",
             xaxis=dict(
@@ -284,10 +429,14 @@ class ConnectivityVisualizer:
         electrode_size: float = 4.5,
         edge_style: str = "arc",              # "arc" or "straight"
         arc_radius: Optional[float] = None,   # None -> automatic radius; set a float to force
-        arc_samples: int = 1,  # Reduced from 24 for faster rendering
+        arc_samples: int = 4,  # Reduced from 24 for faster rendering
         line_width: float = 3.0,
         opacity: float = 0.6,
         title: Optional[str] = None,
+        directed: bool = True,
+        conn_min: float = 0.0,
+        conn_max: float = 1.0,
+        colorscale: str = "Viridis",
     ) -> go.Figure:
         """
         Interactive 3D connectivity. If edge_style == 'arc', edges curve in the plane
@@ -335,33 +484,179 @@ class ConnectivityVisualizer:
             name="Electrodes"
         ))
 
-        # edges
-        xs, ys, zs = [], [], []
+        # edges (support directed and conn range scaling)
+        scale = self._max_conn_scale(C)
+        # signed data range for mapping
+        if np.any(np.isfinite(C)):
+            data_min = float(np.nanmin(C))
+            data_max = float(np.nanmax(C))
+        else:
+            data_min, data_max = -1.0, 1.0
+        # Map normalized conn_min/conn_max (0..1) into actual data range for colorbar limits
+        zmin = data_min + float(np.clip(conn_min, 0.0, 1.0)) * (data_max - data_min)
+        zmax = data_min + float(np.clip(conn_max, 0.0, 1.0)) * (data_max - data_min)
+        if zmin == zmax:
+            zmin, zmax = zmin - 1e-6, zmax + 1e-6
+        line_xs, line_ys, line_zs = [], [], []
+        arrow_x, arrow_y, arrow_z, arrow_adj, arrow_size = [], [], [], [], []
+        arrow_dir_u, arrow_dir_v, arrow_dir_w = [], [], []
+        arrow_vals = []
+
         for i in range(self.n):
             p0 = self.xyz[i]
-            for j in range(i + 1, self.n):
-                w = float(C[i, j])
-                if not np.isfinite(w) or w < 1e-12:  # Skip near-zero connections
+            targets = range(self.n) if directed else range(i + 1, self.n)
+            for j in targets:
+                if i == j:
                     continue
+                w = float(C[i, j])
+                if not np.isfinite(w) or abs(w) < 1e-12:
+                    continue
+
+                if not threshold_type and threshold > 0 and w < threshold:
+                    continue
+
+                # map signed value to 0..1 over data_min..data_max then apply conn window
+                t_global = (w - data_min) / max((data_max - data_min), 1e-12)
+                adj = (t_global - conn_min) / max((conn_max - conn_min), 1e-12)
+                adj = float(np.clip(adj, 0.0, 1.0))
+
                 p1 = self.xyz[j]
+                # sample color from the provided colorscale
+                try:
+                    edge_col = _color_from_scale(colorscale, adj)
+                except Exception:
+                    edge_col = _rgba_from_color('red' if w >= 0 else 'blue', max(0.12, 0.25 + 0.75 * adj))
+
+                # detect reciprocal edge and compute an offset perpendicular to the chord
+                reverse_exists = (np.isfinite(C[j, i]) and abs(C[j, i]) > 1e-12)
+                sign = 0
+                if reverse_exists:
+                    sign = 1 if i < j else -1
+
+                chord = p1 - p0
+                L = np.linalg.norm(chord)
+                if L < 1e-12:
+                    perp = np.array([0.0, 0.0, 0.0])
+                else:
+                    d = chord / L
+                    perp = np.cross(d, np.array([0.0, 0.0, 1.0]))
+                    if np.linalg.norm(perp) < 1e-6:
+                        perp = np.cross(d, np.array([0.0, 1.0, 0.0]))
+                    perp = perp / (np.linalg.norm(perp) + 1e-12)
+
+                offset_amt = 0.06 * L * sign
+
                 if edge_style == "arc":
                     X, Y, Z = self._arc_points_origin_plane(p0, p1, arc_radius, m=max(int(arc_samples), 2))
-                    xs += list(X) + [None]
-                    ys += list(Y) + [None]
-                    zs += list(Z) + [None]
-                else:
-                    xs += [p0[0], p1[0], None]
-                    ys += [p0[1], p1[1], None]
-                    zs += [p0[2], p1[2], None]
+                    # apply lateral offset to the arc shape (keep endpoints fixed)
+                    if sign != 0:
+                        tvals = np.linspace(0.0, 1.0, len(X))
+                        # envelope zero at endpoints, max at midpoint -> sin(pi*t)
+                        env = np.sin(np.pi * tvals)
+                        X = np.array(X) + perp[0] * offset_amt * env
+                        Y = np.array(Y) + perp[1] * offset_amt * env
+                        Z = np.array(Z) + perp[2] * offset_amt * env
 
-        if xs:
+                    # add each edge as its own trace so we can color it independently
+                    fig.add_trace(go.Scatter3d(x=list(X), y=list(Y), z=list(Z), mode="lines",
+                                               line=dict(width=line_width * (0.6 + 0.8 * adj), color=edge_col),
+                                               opacity=opacity, showlegend=False, hoverinfo="text",
+                                               text=f"{self.labels[i]} → {self.labels[j]}<br>Weight: {w:.3f}"))
+
+                    # add a cone (arrowhead) near the end of the arc
+                    if directed and len(X) >= 2:
+                        q0 = np.array([X[-2], Y[-2], Z[-2]])
+                        q1 = np.array([X[-1], Y[-1], Z[-1]])
+                        pos = q1 - 0.05 * (q1 - q0)
+                        # store cone base position and direction
+                        arrow_x.append(pos[0]); arrow_y.append(pos[1]); arrow_z.append(pos[2])
+                        # direction from q0->q1
+                        vec = q1 - q0
+                        norm = np.linalg.norm(vec)
+                        if norm < 1e-9:
+                            # fallback to chord direction if segment too small
+                            vec = p1 - p0
+                            norm = np.linalg.norm(vec) + 1e-12
+                        vec = vec / (norm + 1e-12)
+                        arrow_adj.append(adj)
+                        arrow_vals.append(w)
+                        arrow_size.append(max(0.6, 0.6 * adj))
+                        arrow_dir_u.append(vec[0]); arrow_dir_v.append(vec[1]); arrow_dir_w.append(vec[2])
+
+                else:  # straight edge
+                    # straight edge as a short bent segment when reciprocal, otherwise straight line
+                    if sign != 0:
+                        mid = (p0 + p1) / 2.0 + perp * offset_amt
+                        xs_seg = [p0[0], mid[0], p1[0]]
+                        ys_seg = [p0[1], mid[1], p1[1]]
+                        zs_seg = [p0[2], mid[2], p1[2]]
+                    else:
+                        xs_seg = [p0[0], p1[0]]
+                        ys_seg = [p0[1], p1[1]]
+                        zs_seg = [p0[2], p1[2]]
+
+                    fig.add_trace(go.Scatter3d(x=xs_seg, y=ys_seg, z=zs_seg, mode="lines",
+                                               line=dict(width=line_width * (0.6 + 0.8 * adj), color=edge_col),
+                                               opacity=opacity, showlegend=False, hoverinfo="text",
+                                               text=f"{self.labels[i]} → {self.labels[j]}<br>Weight: {w:.3f}"))
+                    if directed:
+                        pos = np.array([xs_seg[-2], ys_seg[-2], zs_seg[-2]]) if len(xs_seg) > 2 else ((p0 + p1) / 2.0)
+                        arrow_x.append(pos[0]); arrow_y.append(pos[1]); arrow_z.append(pos[2])
+                        vec = (p1 - p0)
+                        vec = vec / (np.linalg.norm(vec) + 1e-12)
+                        arrow_adj.append(adj)
+                        arrow_vals.append(w)
+                        arrow_size.append(max(1.5, 3.0 * adj))
+                        arrow_dir_u.append(vec[0]); arrow_dir_v.append(vec[1]); arrow_dir_w.append(vec[2])
+
+        if line_xs:
             fig.add_trace(go.Scatter3d(
-                x=xs, y=ys, z=zs,
+                x=line_xs, y=line_ys, z=line_zs,
                 mode="lines",
                 line=dict(width=line_width),
                 opacity=opacity,
                 name=("Arcs" if edge_style == "arc" else "Edges")
             ))
+
+        if directed and arrow_x:
+            # Prefer 3D cone glyphs for arrowheads. We map arrow_adj (0..1) into colorscale for cone coloring.
+            try:
+                # Color cones using the actual connection values (arrow_vals) and the mapped zmin/zmax
+                fig.add_trace(go.Cone(
+                    x=arrow_x, y=arrow_y, z=arrow_z,
+                    u=arrow_dir_u, v=arrow_dir_v, w=arrow_dir_w,
+                    sizemode='absolute', sizeref=max(0.5, float(np.nanmax(arrow_size))),
+                    anchor='tip',
+                    colorscale=colorscale, cmin=zmin, cmax=zmax,
+                    color=arrow_vals,
+                    showscale=False,
+                ))
+            except Exception:
+                # Fallback: use colored markers sampled from colorscale
+                try:
+                    # map actual arrow values into normalized [0,1] for sampling the colorscale
+                    span = float(zmax - zmin) if zmax != zmin else 1.0
+                    marker_colors = [_color_from_scale(colorscale, float(np.clip((val - zmin) / span, 0.0, 1.0))) for val in arrow_vals]
+                except Exception:
+                    marker_colors = ['red' if v >= 0.5 else 'blue' for v in arrow_vals]
+                fig.add_trace(go.Scatter3d(
+                    x=arrow_x, y=arrow_y, z=arrow_z,
+                    mode="markers",
+                    marker=dict(size= [max(4, s*6) for s in arrow_size], color=marker_colors),
+                    name="Direction",
+                    hoverinfo="skip",
+                ))
+
+        # colorbar for 3D: invisible marker trace to display colorscale legend
+        try:
+            fig.add_trace(go.Scatter3d(
+                x=[None], y=[None], z=[None], mode="markers",
+                marker=dict(colorscale=colorscale, cmin=zmin, cmax=zmax, color=[zmin, zmax], showscale=True,
+                            colorbar=dict(title="Conn", len=0.45, thickness=12)),
+                showlegend=False, hoverinfo="none",
+            ))
+        except Exception:
+            pass
 
         fig.update_layout(
             scene=dict(
@@ -387,6 +682,9 @@ class ConnectivityVisualizer:
         title: Optional[str] = None,
         showscale: bool = True,
         bg_color: str = "rgba(230,230,230,0.3)"  # faint gray grid background
+        ,
+        conn_min: float = 0.0,
+        conn_max: float = 1.0,
     ) -> go.Figure:
         """
         Connectivity heatmap (n x n) with faint empty grid rectangles for missing/thresholded cells.
@@ -407,17 +705,22 @@ class ConnectivityVisualizer:
             C = C.copy()
             C[mask] = np.nan
 
-        # Color range
+        # Color range: compute full-data min/max then map conn_min/conn_max (0..1) into that range
+        if np.any(np.isfinite(C)):
+            data_min = float(np.nanmin(C))
+            data_max = float(np.nanmax(C))
+        else:
+            data_min, data_max = -1.0, 1.0
+
         if center_zero:
             max_abs = np.nanmax(np.abs(C)) if np.any(np.isfinite(C)) else 1.0
             zmin, zmax = -max_abs, max_abs
         else:
-            if np.any(np.isfinite(C)):
-                zmin, zmax = float(np.nanmin(C)), float(np.nanmax(C))
-                if zmin == zmax:
-                    zmin, zmax = zmin - 1e-6, zmax + 1e-6
-            else:
-                zmin, zmax = -1.0, 1.0
+            # Map normalized conn_min/conn_max (0..1) into actual data range
+            zmin = data_min + float(np.clip(conn_min, 0.0, 1.0)) * (data_max - data_min)
+            zmax = data_min + float(np.clip(conn_max, 0.0, 1.0)) * (data_max - data_min)
+            if zmin == zmax:
+                zmin, zmax = zmin - 1e-6, zmax + 1e-6
 
         # --- Background layer: faint grid of boxes ---
         bg = np.full_like(C, np.nan)
