@@ -65,6 +65,29 @@ def create_slider(id: str, n_frames: int, label: str = "Frame") -> html.Div:
     )
 
 def create_thesh_component(id: str, label: str = "Threshold") -> html.Div:
+    def _create_stat_test_component(id: str) -> html.Div:
+        return html.Div(
+            [
+                dbc.Label("Statistical Test Options"),
+                dcc.Dropdown(
+                    id=f"{id}-test-type",
+                    options=[
+                        {"label": "t-test", "value": "t"},
+                        {"label": "Wilcoxon", "value": "wilcoxon"},
+                    ],
+                    value="t",
+                    clearable=False,
+                ),
+                create_slider(
+                    id=f"{id}-alpha",
+                    n_frames=100,
+                    label="Alpha Value (%)"
+                )
+            ],
+            className="mt-2",
+        )
+    stat_test_component = _create_stat_test_component(id)
+
     """Create a threshold input component with optional slider."""
     return html.Div(
         [
@@ -74,6 +97,7 @@ def create_thesh_component(id: str, label: str = "Threshold") -> html.Div:
                 options=[
                     {"label":"Basic", "value": "Basic"},
                     {"label":"MST", "value": "Minimum Spanning Tree"},
+                    {"label":"Statistical Test", "value": "Statistical Test"}
                 ],
                 value="Basic",
                 clearable=False,
@@ -84,7 +108,12 @@ def create_thesh_component(id: str, label: str = "Threshold") -> html.Div:
                     create_slider(id=f"{id}-slider", n_frames=100, label="Threshold Value (%)")
                 ],
                 className="mt-2",
-            )
+            ),
+            html.Div(
+                id=f"{id}-stat-test-container",
+                children=[stat_test_component],
+                className="mt-2",
+            ),
         ],
         className="mb-3",
     )
@@ -102,4 +131,79 @@ def create_dropdown(id: str, options: list[dict], label: str = "Select Option", 
             )
         ],
         className="mb-3",
+    )
+
+def create_viz_controls(id_prefix: str, n_mat: int) -> html.Div:
+    viz_type_options = [
+        {"label": "2D", "value": "2D"},
+        {"label": "3D", "value": "3D"},
+        {"label": "Heatmap", "value": "Heatmap"},
+    ]
+    
+    viz_type_dropdown = create_dropdown(
+        id='viz-type-dropdown',
+        options=viz_type_options,
+        label="Visualization Type",
+        default="2D",
+    )
+
+    color_map_options = [
+        {"label": "Viridis", "value": "Viridis"},
+        {"label": "Cividis", "value": "Cividis"},
+        {"label": "Plasma", "value": "Plasma"},
+        {"label": "Inferno", "value": "Inferno"},
+        {"label": "Magma", "value": "Magma"},
+        {"label": "Turbo", "value": "Turbo"},
+        {"label": "Hot", "value": "Hot"},
+        {"label": "Cool", "value": "Cool"},
+        {"label": "Rainbow", "value": "Rainbow"},
+        {"label": "Cubehelix", "value": "Cubehelix"},
+        {"label": "Greys", "value": "Greys"},
+        {"label": "YlGnBu", "value": "YlGnBu"},
+        {"label": "RdBu", "value": "RdBu"},
+        {"label": "Picnic", "value": "Picnic"},
+        {"label": "Portland", "value": "Portland"},
+        {"label": "Jet", "value": "Jet"},
+        {"label": "Hotpink", "value": "Hotpink"},
+        {"label": "Electric", "value": "Electric"},
+        {"label": "Blackbody", "value": "Blackbody"},
+        {"label": "Earth", "value": "Earth"},
+        {"label": "Balance", "value": "Balance"},
+        {"label": "RdYlGn", "value": "RdYlGn"},
+        {"label": "Spectral", "value": "Spectral"},
+    ]
+
+    color_map_dropdown = create_dropdown(
+        id=f'color-type-dropdown',
+        options=color_map_options,
+        label="Color Type",
+        default="Viridis",
+    )
+
+    
+    min_max_input_group = html.Div(
+        [
+            dbc.Label("Connection range (0-1)"),
+            html.Div(
+                dcc.RangeSlider(
+                    id="conn-range",
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    value=[0.0, 1.0],
+                    allowCross=False,
+                    marks={0: "0.0", 0.5: "0.5", 1.0: "1.0"},
+                    tooltip={"placement": "bottom", "always_visible": False},
+                ),
+            ),
+        ],
+    )
+
+    return dbc.Container(
+        children=[
+            viz_type_dropdown,
+            color_map_dropdown,
+            min_max_input_group],
+        fluid=True,
+        className="p-3 my-3 rounded shadow-sm border border-dark",
     )

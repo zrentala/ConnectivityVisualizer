@@ -1,0 +1,39 @@
+.split-container {
+  display: flex;
+  width: 100%;
+  height: calc(100vh - 40px); /* allow room for header margins */
+  box-sizing: border-box;
+}
+
+.panel {
+  overflow: auto;
+  flex: 0 0 30%; /* default left width */
+  min-width: 220px;
+}
+
+#right-panel {
+  flex: 1 1 auto;
+}
+
+.splitter {
+  width: 8px;
+  background: rgba(0,0,0,0.08);
+  cursor: col-resize;
+  margin: 16px 4px;
+  border-radius: 4px;
+}
+
+/* Small visual handle */
+.splitter::before {
+  content: '';
+  display: block;
+  width: 2px;
+  height: 40px;
+  margin: 6px auto;
+  background: rgba(0,0,0,0.2);
+}
+
+/* Ensure panels maintain bootstrap-like padding inside */
+.panel.bg-light {
+  background-color: #f8f9fa !important;
+}

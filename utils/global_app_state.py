@@ -23,6 +23,6 @@ class GlobalAppState:
         )
 
         self.brain_mesh = self.data.build_brain_mesh()
-        self.thresh_type = "Basic"
+        # self.thresh_type = "Basic"
         
         # No pre-computed figures - they are generated on demand in callbacks
