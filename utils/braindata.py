@@ -12,3 +12,11 @@ class BrainData:
     n_nodes: int
     directed: bool
     labels: np.ndarray
+
+    def __init__(self, conn_mat: np.ndarray, chanlocs: pd.DataFrame, brain_mesh: pv.PolyData, directed: bool = False):
+        self.conn_mat = conn_mat
+        self.chanlocs = chanlocs
+        self.brain_mesh = brain_mesh
+        self.n_nodes = conn_mat.shape[0]
+        self.is_directed = directed
+        self.labels = chanlocs['label'].values

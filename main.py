@@ -21,9 +21,7 @@ def create_app(global_state: GlobalAppState) -> Dash:
     
     # Create initial 2D figure for display
     viz = ConnectivityVisualizer(
-        global_state.data.conn_matrices[0],
-        global_state.chanlocs,
-        brain_mesh=global_state.brain_mesh
+        global_state.brain_data
     )
     initial_fig = viz.figure_2d()
     
