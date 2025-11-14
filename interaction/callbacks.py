@@ -41,19 +41,36 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         except Exception:
             conn_min, conn_max = 0.0, 1.0
 
+        # viz = ConnectivityVisualizer(conn_matrices[idx], chanlocs, brain_mesh=brain_mesh)
+
         viz = global_state.viz
+        viz.update_fields(
+            brain_data=global_state.brain_data,
+            viz_type=viz_type,
+            conn_idx=idx,
+            thresh_type=thresh_type,
+            thresh_value=thresh_value,
+            color_name=color_name,
+            conn_min=conn_min,
+            conn_max=conn_max,
+            alpha=alpha,
+        )
 
-        if viz_type == "2D":
-            fig = _build_2d_figure(viz, thresh_type, thresh_value, color_name, conn_min, conn_max, alpha)
-        elif viz_type == "3D":
-            fig = _build_3d_figure(viz, thresh_type, thresh_value, color_name, conn_min, conn_max, alpha)
-        elif viz_type == "Heatmap":
-            fig = _build_heatmap_figure(viz, thresh_type, thresh_value, color_name, conn_min, conn_max, alpha)
-        else:
-            fig = go.Figure()
-
+        fig = viz.get_figure(brain_data=global_state.brain_data)
+        cmap = _map_colors_for_name(color_name)
         fig.update_layout(uirevision="keep")
         return fig
+        # if viz_type == "2D":
+        #     fig = _build_2d_figure(viz, thresh_type, thresh_value, color_name, conn_min, conn_max, alpha)
+        # elif viz_type == "3D":
+        #     fig = _build_3d_figure(viz, thresh_type, thresh_value, color_name, conn_min, conn_max, alpha)
+        # elif viz_type == "Heatmap":
+        #     fig = _build_heatmap_figure(viz, thresh_type, thresh_value, color_name, conn_min, conn_max, alpha)
+        # else:
+        #     fig = go.Figure()
+
+        # fig.update_layout(uirevision="keep")
+        # return fig
 
 
 def _map_colors_for_name(name: str):
@@ -72,49 +89,49 @@ def _map_colors_for_name(name: str):
     return {"pos_color": "red", "neg_color": "blue", "node_fill": "lightgreen", "colorscale": "RdBu"}
 
 
-def _build_2d_figure(viz: ConnectivityVisualizer, thresh_type: str, thresh_value: float, color_name: str, conn_min: float = 0.0, conn_max: float = 1.0, alpha: float = 5.0) -> go.Figure:
-    cmap = _map_colors_for_name(color_name)
-    return viz.figure_2d(
-        threshold=thresh_value,
-        threshold_type=thresh_type,
-        pos_color=cmap["pos_color"],
-        neg_color=cmap["neg_color"],
-        node_fill=cmap["node_fill"],
-        colorscale=cmap["colorscale"],
-        conn_min=conn_min,
-        conn_max=conn_max,
-        alpha=alpha,
-    )
+# def _build_2d_figure(viz: ConnectivityVisualizer, thresh_type: str, thresh_value: float, color_name: str, conn_min: float = 0.0, conn_max: float = 1.0, alpha: float = 5.0) -> go.Figure:
+#     cmap = _map_colors_for_name(color_name)
+#     return viz.figure_2d(
+#         threshold=thresh_value,
+#         threshold_type=thresh_type,
+#         pos_color=cmap["pos_color"],
+#         neg_color=cmap["neg_color"],
+#         node_fill=cmap["node_fill"],
+#         colorscale=cmap["colorscale"],
+#         conn_min=conn_min,
+#         conn_max=conn_max,
+#         alpha=alpha,
+#     )
 
 
-def _build_3d_figure(viz: ConnectivityVisualizer, thresh_type: str, thresh_value: float, color_name: str, conn_min: float = 0.0, conn_max: float = 1.0, alpha:float = 5.0) -> go.Figure:
-    cmap = _map_colors_for_name(color_name)
-    fig = viz.figure_3d(
-        threshold=thresh_value,
-        threshold_type=thresh_type,
-        line_width=3.0,
-        opacity=0.6,
-        title=None,
-        directed=True,
-        conn_min=conn_min,
-        conn_max=conn_max,
-        colorscale=cmap["colorscale"],
-        alpha=alpha
-    )
+# def _build_3d_figure(viz: ConnectivityVisualizer, thresh_type: str, thresh_value: float, color_name: str, conn_min: float = 0.0, conn_max: float = 1.0, alpha:float = 5.0) -> go.Figure:
+#     cmap = _map_colors_for_name(color_name)
+#     fig = viz.figure_3d(
+#         threshold=thresh_value,
+#         threshold_type=thresh_type,
+#         line_width=3.0,
+#         opacity=0.6,
+#         title=None,
+#         directed=True,
+#         conn_min=conn_min,
+#         conn_max=conn_max,
+#         colorscale=cmap["colorscale"],
+#         alpha=alpha
+#     )
 
-    # Ensure node marker coloring uses the node fill choice
-    for tr in fig.data:
-        if getattr(tr, "type", "") == "scatter3d":
-            if getattr(tr, "mode", "") and "markers" in tr.mode:
-                if hasattr(tr, "marker"):
-                    tr.marker.color = cmap["node_fill"]
-    return fig
+#     # Ensure node marker coloring uses the node fill choice
+#     for tr in fig.data:
+#         if getattr(tr, "type", "") == "scatter3d":
+#             if getattr(tr, "mode", "") and "markers" in tr.mode:
+#                 if hasattr(tr, "marker"):
+#                     tr.marker.color = cmap["node_fill"]
+#     return fig
 
 
-def _build_heatmap_figure(viz: ConnectivityVisualizer, thresh_type: str, thresh_value: float, color_name: str, conn_min: float = 0.0, conn_max: float = 1.0, alpha:float = 5.0) -> go.Figure:
-    cmap = _map_colors_for_name(color_name)
-    fig = viz.figure_heatmap(threshold=thresh_value, threshold_type=thresh_type, colorscale=cmap["colorscale"], conn_min=conn_min, conn_max=conn_max, alpha=alpha)
-    return fig
+# def _build_heatmap_figure(viz: ConnectivityVisualizer, thresh_type: str, thresh_value: float, color_name: str, conn_min: float = 0.0, conn_max: float = 1.0, alpha:float = 5.0) -> go.Figure:
+#     cmap = _map_colors_for_name(color_name)
+#     fig = viz.figure_heatmap(threshold=thresh_value, threshold_type=thresh_type, colorscale=cmap["colorscale"], conn_min=conn_min, conn_max=conn_max, alpha=alpha)
+#     return fig
 
 
 def register_threshold_callback(app: Dash, global_state: GlobalAppState):

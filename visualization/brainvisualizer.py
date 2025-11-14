@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import plotly.colors as plc
 
 import analysis.threshold as thresh
-
+from utils.braindata import BrainData
 try:
     import pyvista as pv
 except Exception:  # make pv optional
@@ -122,71 +122,93 @@ class Channel:
     z: Optional[float] = None
 
 
-@dataclass
 class ConnectivityVisualizer:
     """
     One object to hold data + build both interactive 2D and 3D connectivity figures.
     """
-    conn_idx: int = 0
-    threshold: float = 0.5
-    threshold_type: Optional[str] = None
-    colorscale: str = "Viridis"
-    alpha: float = 5.0
-    conn_min: float = 0.0
-    conn_max: float = 1.0
-    node_size: float = 10.0
-    show_labels: bool = True
-    default_pos_color: str = "red",
-    default_neg_color: str = "blue",
-    node_fill: str = "lightgreen",
-    node_edge: str = "black",
+    def __init__(
+        self,
+        brain_data: BrainData,
+        conn_idx: int = 0,
+        threshold: float = 0.5,
+        threshold_type: Optional[str] = None,
+        colorscale: str = "Viridis",
+        alpha: float = 5.0,
+        conn_min: float = 0.0,
+        conn_max: float = 1.0,
+        node_size: float = 10.0,
+        show_labels: bool = True,
+        default_pos_color: str = "red",
+        default_neg_color: str = "blue",
+        node_fill: str = "lightgreen",
+        node_edge: str = "black",
+        viz_type: str = "2D",
+    ) -> None:
+        # ---- config fields ----
+        self.conn_idx: int = conn_idx
+        self.threshold: float = threshold
+        self.threshold_type: Optional[str] = threshold_type
+        self.colorscale: str = colorscale
+        self.alpha: float = alpha
+        self.conn_min: float = conn_min
+        self.conn_max: float = conn_max
+        self.node_size: float = node_size
+        self.show_labels: bool = show_labels
+        self.default_pos_color: str = default_pos_color
+        self.default_neg_color: str = default_neg_color
+        self.node_fill: str = node_fill
+        self.node_edge: str = node_edge
+        self.viz_type: str = viz_type
 
-    # derived / cached
-    xyz: np.ndarray = field(init=False)      # (n, 3)
-    xy_topo: np.ndarray = field(init=False)  # (n, 2) normalized to head circle
+        # ---- derived / cached fields ----
 
-    def __post_init__(self):
-        self.conn = np.asarray(self.conn)
-        assert self.conn.ndim == 2 and self.conn.shape[0] == self.conn.shape[1], "conn must be (n,n)"
-        self.n = self.conn.shape[0]
+        # coordinates + labels (filled by update_xyz)
+        self.xyz: np.ndarray = np.empty((0, 3), dtype=float)     # (n, 3)
+        self.xy_topo: np.ndarray = np.empty((0, 2), dtype=float) # (n, 2)
 
-        # ---- Parse channel locations into xyz + labels ----
-        if isinstance(self.chanlocs, pd.DataFrame):
-            sx = self.chanlocs["x"].to_numpy()
-            sy = self.chanlocs["y"].to_numpy()
-            sz = self.chanlocs["z"].to_numpy() if "z" in self.chanlocs.columns else np.zeros_like(sx)
-            if "label" in self.chanlocs.columns:
-                labs = self.chanlocs["label"].astype(str).to_numpy()
-            else:
-                labs = np.arange(self.n).astype(str)
-        else:
-            # list/ndarray of Channels or rows like [x, y, (z), (label)]
-            sx, sy, sz, labs = [], [], [], []
-            for row in self.chanlocs:
-                if isinstance(row, Channel):
-                    sx.append(row.x); sy.append(row.y); sz.append(row.z if row.z is not None else 0.0); labs.append(row.label or "")
-                elif isinstance(row, dict):
-                    sx.append(float(row["x"])); sy.append(float(row["y"]))
-                    sz.append(float(row.get("z", 0.0))); labs.append(str(row.get("label", "")))
-                else:
-                    # generic sequence
-                    x = float(row[0]); y = float(row[1])
-                    z = float(row[2]) if len(row) >= 3 and np.isscalar(row[2]) else 0.0
-                    lab = str(row[3]) if len(row) >= 4 else (str(row[2]) if len(row) >= 3 and not np.isscalar(row[2]) else "")
-                    sx.append(x); sy.append(y); sz.append(z); labs.append(lab)
-            sx, sy, sz, labs = map(np.asarray, (sx, sy, sz, labs))
-            if labs.size == 0:  # fallback
-                labs = np.arange(self.n).astype(str)
+        # Use brain_data ONCE to initialize geometry; do not store it.
+        self.update_xyz(brain_data.chanlocs)
 
-        self.labels = labs if labs.size == self.n else np.arange(self.n).astype(str)
-        self.xyz = np.column_stack([sx, sy, sz]).astype(float)
+    # --------- Boilerplate ----------
 
-        # ---- Precompute normalized 2D topography (EEG top view: flip x) ----
-        xs, ys = sx.copy(), sy.copy()
-        xs = -xs / (np.max(np.abs(xs)) + 1e-12) * 0.9
-        ys =  ys / (np.max(np.abs(ys)) + 1e-12) * 0.9
-        self.xy_topo = np.column_stack([xs, ys])
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"conn_idx={self.conn_idx}, "
+            f"threshold={self.threshold}, "
+            f"threshold_type={self.threshold_type!r}, "
+            f"colorscale={self.colorscale!r}, "
+            f"alpha={self.alpha}, "
+            f"conn_min={self.conn_min}, "
+            f"conn_max={self.conn_max}, "
+            f"node_size={self.node_size}, "
+            f"show_labels={self.show_labels}, "
+            f"viz_type={self.viz_type!r}"
+            f")"
+        )
+    
+    def __eq__(self, other) -> bool:
+        """Two visualizers are considered equal if all configuration fields match."""
+        if not isinstance(other, ConnectivityVisualizer):
+            return False
 
+        return (
+            self.conn_idx == other.conn_idx
+            and self.threshold == other.threshold
+            and self.threshold_type == other.threshold_type
+            and self.colorscale == other.colorscale
+            and self.alpha == other.alpha
+            and self.conn_min == other.conn_min
+            and self.conn_max == other.conn_max
+            and self.node_size == other.node_size
+            and self.show_labels == other.show_labels
+            and self.default_pos_color == other.default_pos_color
+            and self.default_neg_color == other.default_neg_color
+            and self.node_fill == other.node_fill
+            and self.node_edge == other.node_edge
+            and self.viz_type == other.viz_type
+        )
+    
     # ---------- Shared helpers ----------
     @staticmethod
     def _max_conn_scale(C: np.ndarray) -> float:
@@ -257,33 +279,173 @@ class ConnectivityVisualizer:
         return pts[:, 0], pts[:, 1], pts[:, 2]
 
     # ---------- Public API ----------
-    def apply_threshold(self, threshold_type: str = "Basic", threshold_value: float = 50.0, alpha: float = 5.0) -> np.ndarray:
-        """
-        Apply thresholding to the connectivity matrix.
-        
-        Args:
-            threshold_type: Either "Basic" or "Minimum Spanning Tree"
-            threshold_value: Percentile threshold for basic thresholding (0-100)
-        
-        Returns:
-            Boolean mask of thresholded connections
-        """
+    def apply_threshold(self) -> np.ndarray:
         conn_normalized = (self.conn - np.min(self.conn)) / (np.max(self.conn) - np.min(self.conn) + 1e-12)
         
-        if threshold_type == "Basic":
+        if self.threshold_type == "Basic":
             # Convert percentage to normalized threshold
-            norm_threshold = threshold_value / 100.0
+            norm_threshold = self.threshold / 100.0
             return thresh.get_basic_map(conn_normalized, norm_threshold)
-        elif threshold_type == "Statistical Test":
+        elif self.threshold_type == "Statistical Test":
             # Convert percentage to normalized threshold
-            norm_alpha = alpha / 100.0
+            norm_alpha = self.alpha / 100.0
             return thresh.get_stattest_mask(self.conn, norm_alpha)
-        elif threshold_type == "MST":  # Minimum Spanning Tree
+        elif self.threshold_type == "MST" or self.threshold_type == "Minimum Spanning Tree":  # Minimum Spanning Tree
             return thresh.get_mst_map(self.conn)
     
+
+    # ---------- Utils ----------
+    def update_xyz(
+        self,
+        chanlocs: Union[pd.DataFrame, Iterable[Union[Channel, dict, Iterable]]]
+    ) -> None:
+        """
+        Update channel locations and recompute derived fields (xyz, xy_topo, labels)
+        from a chanlocs object.
+
+        chanlocs can be:
+        - a pandas DataFrame with columns x, y, optional z, optional label
+        - an iterable of Channel objects
+        - an iterable of dicts with keys 'x', 'y', optional 'z', 'label'
+        - a generic iterable of sequences like [x, y], [x, y, z], [x, y, z, label]
+        """
+
+        # ---- Parse channel locations into xyz + labels ----
+        if isinstance(chanlocs, pd.DataFrame):
+            sx = chanlocs["x"].to_numpy()
+            sy = chanlocs["y"].to_numpy()
+            sz = chanlocs["z"].to_numpy() if "z" in chanlocs.columns else np.zeros_like(sx)
+            if "label" in chanlocs.columns:
+                labs = chanlocs["label"].astype(str).to_numpy()
+            else:
+                labs = np.arange(len(sx)).astype(str)
+        else:
+            # list/ndarray of Channels or rows like [x, y, (z), (label)]
+            sx, sy, sz, labs = [], [], [], []
+            for row in chanlocs:
+                if isinstance(row, Channel):
+                    sx.append(row.x)
+                    sy.append(row.y)
+                    sz.append(row.z if row.z is not None else 0.0)
+                    labs.append(row.label or "")
+                elif isinstance(row, dict):
+                    sx.append(float(row["x"]))
+                    sy.append(float(row["y"]))
+                    sz.append(float(row.get("z", 0.0)))
+                    labs.append(str(row.get("label", "")))
+                else:
+                    # generic sequence
+                    x = float(row[0])
+                    y = float(row[1])
+                    z = float(row[2]) if len(row) >= 3 and np.isscalar(row[2]) else 0.0
+                    lab = (
+                        str(row[3])
+                        if len(row) >= 4
+                        else (str(row[2]) if len(row) >= 3 and not np.isscalar(row[2]) else "")
+                    )
+                    sx.append(x)
+                    sy.append(y)
+                    sz.append(z)
+                    labs.append(lab)
+
+            sx = np.asarray(sx, dtype=float)
+            sy = np.asarray(sy, dtype=float)
+            sz = np.asarray(sz, dtype=float)
+            labs = np.asarray(labs, dtype=str)
+
+            if labs.size == 0:
+                labs = np.arange(len(sx)).astype(str)
+
+        n_ch = len(sx)
+        # If you keep self.n as "number of channels", keep it in sync:
+        self.n = n_ch
+
+        # labels: ensure length matches n_ch; otherwise fallback to generic labels
+        if labs.size == n_ch:
+            self.labels = labs
+        else:
+            self.labels = np.arange(n_ch).astype(str)
+
+        # 3D coordinates
+        self.xyz = np.column_stack([sx, sy, sz]).astype(float)
+
+        # ---- Precompute normalized 2D topography (EEG top view: flip x) ----
+        xs = sx.copy()
+        ys = sy.copy()
+        xs = -xs / (np.max(np.abs(xs)) + 1e-12) * 0.9
+        ys =  ys / (np.max(np.abs(ys)) + 1e-12) * 0.9
+        self.xy_topo = np.column_stack([xs, ys])
+
+
+    def update_fields(
+        self,
+        *,
+        brain_data: BrainData,
+        viz_type: Optional[str] = None,
+        conn_idx: Optional[int] = None,
+        thresh_type: Optional[str] = None,
+        thresh_value: Optional[float] = None,
+        color_name: Optional[str] = None,
+        conn_min: Optional[float] = None,
+        conn_max: Optional[float] = None,
+        alpha: Optional[float] = None,
+    ) -> None:
+        """Update multiple fields of the visualizer at once."""
+        if brain_data is not None:
+            self.update_xyz(brain_data.chanlocs)
+
+        if viz_type is not None:
+            self.viz_type = viz_type
+        if conn_idx is not None:
+            self.conn_idx = int(conn_idx)
+        if thresh_type is not None:
+            self.threshold_type = thresh_type
+        if thresh_value is not None:
+            self.threshold = float(thresh_value)
+        if color_name is not None:
+            self.colorscale = color_name
+        if conn_min is not None:
+            self.conn_min = float(conn_min)
+        if conn_max is not None:
+            self.conn_max = float(conn_max)
+        if alpha is not None:
+            self.alpha = float(alpha)
+
+
+    def get_figure(self, brain_data: BrainData) -> go.Figure:
+        """Get the current figure based on viz_type."""
+        if self.viz_type == "2D":
+            return self.figure_2d(
+                brain_data=brain_data,
+                use_arcs=True,
+                curvature=0.25,
+                lw_min=0.5,
+                lw_max=4.0,
+                title=None,
+            )
+        elif self.viz_type == "3D":
+            return self.figure_3d(
+                brain_data=brain_data,
+                use_arcs=True,
+                R=None,
+                lw_min=0.5,
+                lw_max=4.0,
+                title=None,
+            )
+        elif self.viz_type == "Heatmap":
+            return self.figure_heatmap(
+                brain_data=brain_data.brain_data,
+                title=None,
+            )
+        else:
+            return go.Figure()
+
+    # ---------- Visualization methods ----------
+
     def figure_2d(
         self,
         *,
+        brain_data: BrainData,
         use_arcs: bool = True,
         curvature: float = 0.25,
         lw_min: float = 0.5,
@@ -301,9 +463,9 @@ class ConnectivityVisualizer:
         np.fill_diagonal(C, 0.0)
         
         # Apply thresholding if specified
-        if threshold_type:
+        if self.threshold_type:
             # apply_threshold expects threshold as percentage when threshold_type == 'Basic'
-            mask = self.apply_threshold(threshold_type, threshold, alpha)
+            mask = self.apply_threshold()
             C = C * mask
         
         scale = self._max_conn_scale(C)
@@ -314,8 +476,8 @@ class ConnectivityVisualizer:
         else:
             data_min, data_max = -1.0, 1.0
         # Map normalized conn_min/conn_max (0..1) into actual data range for colorbar limits
-        zmin = data_min + float(np.clip(conn_min, 0.0, 1.0)) * (data_max - data_min)
-        zmax = data_min + float(np.clip(conn_max, 0.0, 1.0)) * (data_max - data_min)
+        zmin = data_min + float(np.clip(self.conn_min, 0.0, 1.0)) * (data_max - data_min)
+        zmax = data_min + float(np.clip(self.conn_max, 0.0, 1.0)) * (data_max - data_min)
         if zmin == zmax:
             zmin, zmax = zmin - 1e-6, zmax + 1e-6
         x, y = self.xy_topo[:, 0], self.xy_topo[:, 1]
@@ -341,22 +503,22 @@ class ConnectivityVisualizer:
                     continue
 
                 # If threshold_type was not used, the caller may have given an absolute threshold
-                if not threshold_type and threshold > 0 and abs(w) < threshold:
+                if not self.threshold_type and self.threshold > 0 and abs(w) < self.threshold:
                     continue
 
                 # Signed mapping: normalize w into global [data_min,data_max] then map via conn_min/conn_max
                 t_global = (w - data_min) / (max((data_max - data_min), 1e-12))
                 try:
-                    adj = (t_global - conn_min) / max((conn_max - conn_min), 1e-12)
+                    adj = (t_global - self.conn_min) / max((self.conn_max - self.conn_min), 1e-12)
                 except Exception:
                     adj = t_global
                 adj = float(np.clip(adj, 0.0, 1.0))
 
                 # Color sampled from colorscale using sign-aware adj
                 try:
-                    color = _color_from_scale(colorscale, adj)
+                    color = _color_from_scale(self.colorscale, adj)
                 except Exception:
-                    base_color = pos_color if w >= 0 else neg_color
+                    base_color = self.default_pos_color if w >= 0 else self.default_neg_color
                     color = _rgba_from_color(base_color, max(0.12, 0.25 + 0.75 * adj))
 
                 # width reflects absolute magnitude relative to max abs
@@ -371,7 +533,7 @@ class ConnectivityVisualizer:
                     hoverinfo="text",
                     text=f"{labels[i]} → {labels[j]}<br>Weight: {w:.3f}",
                 ))
-                if directed:
+                if brain_data.is_directed:
                     # arrowhead near the end (simple 2-point)
                     if len(P) >= 2:
                         q0, q1 = P[-2], P[-1]
@@ -386,10 +548,10 @@ class ConnectivityVisualizer:
         # nodes
         fig.add_trace(go.Scatter(
             x=x, y=y,
-            mode="markers+text" if show_labels else "markers",
-            text=self.labels if show_labels else None,
+            mode="markers+text" if self.show_labels else "markers",
+            text=self.labels if self.show_labels else None,
             textposition="middle center",
-            marker=dict(size=node_size, color=node_fill, line=dict(color=node_edge, width=2)),
+            marker=dict(size=self.node_size, color=self.node_fill, line=dict(color=self.node_edge, width=2)),
             hovertext=self.labels, hoverinfo="text",
             name="Electrodes"
         ))
@@ -398,7 +560,7 @@ class ConnectivityVisualizer:
         try:
             fig.add_trace(go.Scatter(
                 x=[None], y=[None], mode="markers",
-                marker=dict(colorscale=colorscale, cmin=zmin, cmax=zmax, color=[zmin, zmax], showscale=True,
+                marker=dict(colorscale=self.colorscale, cmin=zmin, cmax=zmax, color=[zmin, zmax], showscale=True,
                             colorbar=dict(title="Conn", len=0.45, thickness=12)),
                 showlegend=False, hoverinfo="none",
             ))
@@ -422,21 +584,12 @@ class ConnectivityVisualizer:
     def figure_3d(
         self,
         *,
-        threshold: float = 0.9,
-        threshold_type: Optional[str] = None,
-        show_labels: bool = True,
-        electrode_size: float = 4.5,
-        edge_style: str = "arc",              # "arc" or "straight"
+        brain_data: BrainData,
         arc_radius: Optional[float] = None,   # None -> automatic radius; set a float to force
         arc_samples: int = 4,  # Reduced from 24 for faster rendering
         line_width: float = 3.0,
         opacity: float = 0.6,
         title: Optional[str] = None,
-        directed: bool = True,
-        conn_min: float = 0.0,
-        conn_max: float = 1.0,
-        colorscale: str = "Viridis",
-        alpha: float = 5.0,
     ) -> go.Figure:
         """
         Interactive 3D connectivity. If edge_style == 'arc', edges curve in the plane
@@ -447,12 +600,11 @@ class ConnectivityVisualizer:
             threshold: Threshold value (absolute) or percentage (if threshold_type is set)
             threshold_type: If set to "Basic" or "Minimum Spanning Tree", applies that thresholding
         """
-        assert edge_style in ("arc", "straight")
         
         # Get connectivity matrix (potentially thresholded)
         C = self.conn.copy()
-        if threshold_type:
-            mask = self.apply_threshold(threshold_type, threshold, alpha)
+        if self.threshold_type:
+            mask = self.apply_threshold()
             C = C * mask
         
         np.fill_diagonal(C, 0.0)
@@ -460,9 +612,9 @@ class ConnectivityVisualizer:
         fig = go.Figure()
 
         # mesh (optional)
-        if self.brain_mesh is not None and pv is not None and self.brain_mesh.n_points > 0:
-            pts = np.asarray(self.brain_mesh.points)
-            faces_np = np.asarray(self.brain_mesh.faces)
+        if brain_data.brain_mesh is not None and pv is not None and brain_data.brain_mesh.n_points > 0:
+            pts = np.asarray(brain_data.brain_mesh.points)
+            faces_np = np.asarray(brain_data.brain_mesh.faces)
             faces = faces_np.reshape(-1, 4)[:, 1:4].astype(int)
             fig.add_trace(go.Mesh3d(
                 x=pts[:, 0], y=pts[:, 1], z=pts[:, 2],
@@ -476,11 +628,11 @@ class ConnectivityVisualizer:
         x, y, z = self.xyz[:, 0], self.xyz[:, 1], self.xyz[:, 2]
         fig.add_trace(go.Scatter3d(
             x=x, y=y, z=z,
-            mode="markers+text" if show_labels else "markers",
-            text=self.labels if show_labels else None,
+            mode="markers+text" if self.show_labels else "markers",
+            text=self.labels if self.show_labels else None,
             textposition="top center",
             textfont=dict(size=10, color="black"),
-            marker=dict(size=electrode_size),
+            marker=dict(size=self.node_size),
             name="Electrodes"
         ))
 
@@ -493,8 +645,8 @@ class ConnectivityVisualizer:
         else:
             data_min, data_max = -1.0, 1.0
         # Map normalized conn_min/conn_max (0..1) into actual data range for colorbar limits
-        zmin = data_min + float(np.clip(conn_min, 0.0, 1.0)) * (data_max - data_min)
-        zmax = data_min + float(np.clip(conn_max, 0.0, 1.0)) * (data_max - data_min)
+        zmin = data_min + float(np.clip(self.conn_min, 0.0, 1.0)) * (data_max - data_min)
+        zmax = data_min + float(np.clip(self.conn_max, 0.0, 1.0)) * (data_max - data_min)
         if zmin == zmax:
             zmin, zmax = zmin - 1e-6, zmax + 1e-6
         line_xs, line_ys, line_zs = [], [], []
@@ -504,7 +656,7 @@ class ConnectivityVisualizer:
 
         for i in range(self.n):
             p0 = self.xyz[i]
-            targets = range(self.n) if directed else range(i + 1, self.n)
+            targets = range(self.n) if brain_data.directed else range(i + 1, self.n)
             for j in targets:
                 if i == j:
                     continue
@@ -512,18 +664,18 @@ class ConnectivityVisualizer:
                 if not np.isfinite(w) or abs(w) < 1e-12:
                     continue
 
-                if not threshold_type and threshold > 0 and w < threshold:
+                if not self.threshold_type and self.threshold > 0 and w < self.threshold:
                     continue
 
                 # map signed value to 0..1 over data_min..data_max then apply conn window
                 t_global = (w - data_min) / max((data_max - data_min), 1e-12)
-                adj = (t_global - conn_min) / max((conn_max - conn_min), 1e-12)
+                adj = (t_global - self.conn_min) / max((self.conn_max - self.onn_min), 1e-12)
                 adj = float(np.clip(adj, 0.0, 1.0))
 
                 p1 = self.xyz[j]
                 # sample color from the provided colorscale
                 try:
-                    edge_col = _color_from_scale(colorscale, adj)
+                    edge_col = _color_from_scale(self.colorscale, adj)
                 except Exception:
                     edge_col = _rgba_from_color('red' if w >= 0 else 'blue', max(0.12, 0.25 + 0.75 * adj))
 
@@ -546,68 +698,41 @@ class ConnectivityVisualizer:
 
                 offset_amt = 0.06 * L * sign
 
-                if edge_style == "arc":
-                    X, Y, Z = self._arc_points_origin_plane(p0, p1, arc_radius, m=max(int(arc_samples), 2))
-                    # apply lateral offset to the arc shape (keep endpoints fixed)
-                    if sign != 0:
-                        tvals = np.linspace(0.0, 1.0, len(X))
-                        # envelope zero at endpoints, max at midpoint -> sin(pi*t)
-                        env = np.sin(np.pi * tvals)
-                        X = np.array(X) + perp[0] * offset_amt * env
-                        Y = np.array(Y) + perp[1] * offset_amt * env
-                        Z = np.array(Z) + perp[2] * offset_amt * env
+                X, Y, Z = self._arc_points_origin_plane(p0, p1, arc_radius, m=max(int(arc_samples), 2))
+                # apply lateral offset to the arc shape (keep endpoints fixed)
+                if sign != 0:
+                    tvals = np.linspace(0.0, 1.0, len(X))
+                    # envelope zero at endpoints, max at midpoint -> sin(pi*t)
+                    env = np.sin(np.pi * tvals)
+                    X = np.array(X) + perp[0] * offset_amt * env
+                    Y = np.array(Y) + perp[1] * offset_amt * env
+                    Z = np.array(Z) + perp[2] * offset_amt * env
 
-                    # add each edge as its own trace so we can color it independently
-                    fig.add_trace(go.Scatter3d(x=list(X), y=list(Y), z=list(Z), mode="lines",
-                                               line=dict(width=line_width * (0.6 + 0.8 * adj), color=edge_col),
-                                               opacity=opacity, showlegend=False, hoverinfo="text",
-                                               text=f"{self.labels[i]} → {self.labels[j]}<br>Weight: {w:.3f}"))
+                # add each edge as its own trace so we can color it independently
+                fig.add_trace(go.Scatter3d(x=list(X), y=list(Y), z=list(Z), mode="lines",
+                                            line=dict(width=line_width * (0.6 + 0.8 * adj), color=edge_col),
+                                            opacity=opacity, showlegend=False, hoverinfo="text",
+                                            text=f"{self.labels[i]} → {self.labels[j]}<br>Weight: {w:.3f}"))
 
-                    # add a cone (arrowhead) near the end of the arc
-                    if directed and len(X) >= 2:
-                        q0 = np.array([X[-2], Y[-2], Z[-2]])
-                        q1 = np.array([X[-1], Y[-1], Z[-1]])
-                        pos = q1 - 0.05 * (q1 - q0)
-                        # store cone base position and direction
-                        arrow_x.append(pos[0]); arrow_y.append(pos[1]); arrow_z.append(pos[2])
-                        # direction from q0->q1
-                        vec = q1 - q0
-                        norm = np.linalg.norm(vec)
-                        if norm < 1e-9:
-                            # fallback to chord direction if segment too small
-                            vec = p1 - p0
-                            norm = np.linalg.norm(vec) + 1e-12
-                        vec = vec / (norm + 1e-12)
-                        arrow_adj.append(adj)
-                        arrow_vals.append(w)
-                        arrow_size.append(max(0.6, 0.6 * adj))
-                        arrow_dir_u.append(vec[0]); arrow_dir_v.append(vec[1]); arrow_dir_w.append(vec[2])
-
-                else:  # straight edge
-                    # straight edge as a short bent segment when reciprocal, otherwise straight line
-                    if sign != 0:
-                        mid = (p0 + p1) / 2.0 + perp * offset_amt
-                        xs_seg = [p0[0], mid[0], p1[0]]
-                        ys_seg = [p0[1], mid[1], p1[1]]
-                        zs_seg = [p0[2], mid[2], p1[2]]
-                    else:
-                        xs_seg = [p0[0], p1[0]]
-                        ys_seg = [p0[1], p1[1]]
-                        zs_seg = [p0[2], p1[2]]
-
-                    fig.add_trace(go.Scatter3d(x=xs_seg, y=ys_seg, z=zs_seg, mode="lines",
-                                               line=dict(width=line_width * (0.6 + 0.8 * adj), color=edge_col),
-                                               opacity=opacity, showlegend=False, hoverinfo="text",
-                                               text=f"{self.labels[i]} → {self.labels[j]}<br>Weight: {w:.3f}"))
-                    if directed:
-                        pos = np.array([xs_seg[-2], ys_seg[-2], zs_seg[-2]]) if len(xs_seg) > 2 else ((p0 + p1) / 2.0)
-                        arrow_x.append(pos[0]); arrow_y.append(pos[1]); arrow_z.append(pos[2])
-                        vec = (p1 - p0)
-                        vec = vec / (np.linalg.norm(vec) + 1e-12)
-                        arrow_adj.append(adj)
-                        arrow_vals.append(w)
-                        arrow_size.append(max(1.5, 3.0 * adj))
-                        arrow_dir_u.append(vec[0]); arrow_dir_v.append(vec[1]); arrow_dir_w.append(vec[2])
+                # add a cone (arrowhead) near the end of the arc
+                if brain_data.is_directed and len(X) >= 2:
+                    q0 = np.array([X[-2], Y[-2], Z[-2]])
+                    q1 = np.array([X[-1], Y[-1], Z[-1]])
+                    pos = q1 - 0.05 * (q1 - q0)
+                    # store cone base position and direction
+                    arrow_x.append(pos[0]); arrow_y.append(pos[1]); arrow_z.append(pos[2])
+                    # direction from q0->q1
+                    vec = q1 - q0
+                    norm = np.linalg.norm(vec)
+                    if norm < 1e-9:
+                        # fallback to chord direction if segment too small
+                        vec = p1 - p0
+                        norm = np.linalg.norm(vec) + 1e-12
+                    vec = vec / (norm + 1e-12)
+                    arrow_adj.append(adj)
+                    arrow_vals.append(w)
+                    arrow_size.append(max(0.6, 0.6 * adj))
+                    arrow_dir_u.append(vec[0]); arrow_dir_v.append(vec[1]); arrow_dir_w.append(vec[2])
 
         if line_xs:
             fig.add_trace(go.Scatter3d(
@@ -615,10 +740,10 @@ class ConnectivityVisualizer:
                 mode="lines",
                 line=dict(width=line_width),
                 opacity=opacity,
-                name=("Arcs" if edge_style == "arc" else "Edges")
+                name=("Edges")
             ))
 
-        if directed and arrow_x:
+        if brain_data.is_directed and arrow_x:
             # Prefer 3D cone glyphs for arrowheads. We map arrow_adj (0..1) into colorscale for cone coloring.
             try:
                 # Color cones using the actual connection values (arrow_vals) and the mapped zmin/zmax
@@ -627,7 +752,7 @@ class ConnectivityVisualizer:
                     u=arrow_dir_u, v=arrow_dir_v, w=arrow_dir_w,
                     sizemode='absolute', sizeref=max(0.5, float(np.nanmax(arrow_size))),
                     anchor='tip',
-                    colorscale=colorscale, cmin=zmin, cmax=zmax,
+                    colorscale=self.colorscale, cmin=zmin, cmax=zmax,
                     color=arrow_vals,
                     showscale=False,
                 ))
@@ -636,7 +761,7 @@ class ConnectivityVisualizer:
                 try:
                     # map actual arrow values into normalized [0,1] for sampling the colorscale
                     span = float(zmax - zmin) if zmax != zmin else 1.0
-                    marker_colors = [_color_from_scale(colorscale, float(np.clip((val - zmin) / span, 0.0, 1.0))) for val in arrow_vals]
+                    marker_colors = [_color_from_scale(self.colorscale, float(np.clip((val - zmin) / span, 0.0, 1.0))) for val in arrow_vals]
                 except Exception:
                     marker_colors = ['red' if v >= 0.5 else 'blue' for v in arrow_vals]
                 fig.add_trace(go.Scatter3d(
@@ -651,7 +776,7 @@ class ConnectivityVisualizer:
         try:
             fig.add_trace(go.Scatter3d(
                 x=[None], y=[None], z=[None], mode="markers",
-                marker=dict(colorscale=colorscale, cmin=zmin, cmax=zmax, color=[zmin, zmax], showscale=True,
+                marker=dict(colorscale=self.colorscale, cmin=zmin, cmax=zmax, color=[zmin, zmax], showscale=True,
                             colorbar=dict(title="Conn", len=0.45, thickness=12)),
                 showlegend=False, hoverinfo="none",
             ))
@@ -675,16 +800,7 @@ class ConnectivityVisualizer:
     def figure_heatmap(
         self,
         *,
-        threshold: float = 0.0,
-        threshold_type: Optional[str] = None,
-        center_zero: bool = False,
-        colorscale: str = "RdBu",
-        showscale: bool = True,
-        bg_color: str = "rgba(230,230,230,0.3)"  # faint gray grid background
-        ,
-        conn_min: float = 0.0,
-        conn_max: float = 1.0,
-        alpha: float = 5.0,
+        brain_data: BrainData,
     ) -> go.Figure:
         """
         Connectivity heatmap (n x n) with faint empty grid rectangles for missing/thresholded cells.
@@ -693,17 +809,11 @@ class ConnectivityVisualizer:
             threshold: Threshold value (absolute) or percentage (if threshold_type is set)
             threshold_type: If set to "Basic" or "Minimum Spanning Tree", applies that thresholding
         """
-        C = np.array(self.conn, dtype=float)
+        C = np.array(brain_data.conn, dtype=float)
+        bg_color = "rgba(230,230,230,0.3)"
 
-        # Apply advanced thresholding if specified
-        if threshold_type:
-            mask = self.apply_threshold(threshold_type, threshold, alpha)
-            C = C * mask
-        # Otherwise apply basic absolute thresholding
-        elif threshold > 0:
-            mask = np.abs(C) < threshold
-            C = C.copy()
-            C[mask] = np.nan
+        mask = self.apply_threshold()
+        C = C * mask
 
         # Color range: compute full-data min/max then map conn_min/conn_max (0..1) into that range
         if np.any(np.isfinite(C)):
@@ -712,15 +822,11 @@ class ConnectivityVisualizer:
         else:
             data_min, data_max = -1.0, 1.0
 
-        if center_zero:
-            max_abs = np.nanmax(np.abs(C)) if np.any(np.isfinite(C)) else 1.0
-            zmin, zmax = -max_abs, max_abs
-        else:
-            # Map normalized conn_min/conn_max (0..1) into actual data range
-            zmin = data_min + float(np.clip(conn_min, 0.0, 1.0)) * (data_max - data_min)
-            zmax = data_min + float(np.clip(conn_max, 0.0, 1.0)) * (data_max - data_min)
-            if zmin == zmax:
-                zmin, zmax = zmin - 1e-6, zmax + 1e-6
+         # Map normalized conn_min/conn_max (0..1) into actual data range
+        zmin = data_min + float(np.clip(self.conn_min, 0.0, 1.0)) * (data_max - data_min)
+        zmax = data_min + float(np.clip(self.conn_max, 0.0, 1.0)) * (data_max - data_min)
+        if zmin == zmax:
+            zmin, zmax = zmin - 1e-6, zmax + 1e-6
 
         # --- Background layer: faint grid of boxes ---
         bg = np.full_like(C, np.nan)
@@ -744,13 +850,13 @@ class ConnectivityVisualizer:
             z=C,
             x=self.labels,
             y=self.labels,
-            colorscale=colorscale,
+            colorscale=self.colorscale,
             zmin=zmin,
             zmax=zmax,
             xgap=0.5,
             ygap=0.5,
-            colorbar=dict(title="Conn") if showscale else None,
-            showscale=showscale,
+            colorbar=dict(title="Conn"),
+            showscale=True,
             hovertemplate="From %{y}<br>To %{x}<br>Value=%{z:.3f}<extra></extra>",
         ))
 
@@ -774,22 +880,3 @@ class ConnectivityVisualizer:
         )
 
         return fig
-
-
-
-
-    # ---------- Convenience utilities ----------
-    def subset(self, nodes: Iterable[int]) -> "ConnectivityVisualizer":
-        """Return a new visualizer with a node subset (by indices)."""
-        idx = np.array(list(nodes), dtype=int)
-        sub_conn = self.conn[np.ix_(idx, idx)]
-        sub_xyz = self.xyz[idx]
-        sub_labels = self.labels[idx]
-        df = pd.DataFrame(dict(x=sub_xyz[:, 0], y=sub_xyz[:, 1], z=sub_xyz[:, 2], label=sub_labels))
-        return ConnectivityVisualizer(sub_conn, df, brain_mesh=self.brain_mesh)
-
-    def set_conn(self, conn: np.ndarray) -> None:
-        """Replace connectivity matrix in-place (keeps geometry)."""
-        conn = np.asarray(conn)
-        assert conn.shape == (self.n, self.n)
-        self.conn = conn
