@@ -295,7 +295,7 @@ class ConnectivityVisualizer:
     
 
     # ---------- Utils ----------
-    def get_conn_matrix(self, brain_data: BrainData) -> np.ndarray:
+    def get_mat_at_idx(self, brain_data: BrainData) -> np.ndarray:
         C = brain_data.conn_mat[self.conn_idx, :, : ].copy()
         return C
     
@@ -459,7 +459,7 @@ class ConnectivityVisualizer:
             threshold: Basic threshold value (absolute) or percentage (if threshold_type is set)
             threshold_type: If set to "Basic" or "Minimum Spanning Tree", applies that thresholding
         """
-        C = self.get_conn_matrix(brain_data)
+        C = self.get_mat_at_idx(brain_data)
         np.fill_diagonal(C, 0.0)
         
         # Apply thresholding if specified
@@ -602,7 +602,7 @@ class ConnectivityVisualizer:
         """
         
         # Get connectivity matrix (potentially thresholded)
-        C = self.get_conn_matrix(brain_data)
+        C = self.get_mat_at_idx(brain_data)
         if self.threshold_type:
             mask = self.apply_threshold(C)
             C = C * mask
@@ -809,7 +809,7 @@ class ConnectivityVisualizer:
             threshold: Threshold value (absolute) or percentage (if threshold_type is set)
             threshold_type: If set to "Basic" or "Minimum Spanning Tree", applies that thresholding
         """
-        C = self.get_conn_matrix(brain_data)
+        C = self.get_mat_at_idx(brain_data)
         bg_color = "rgba(230,230,230,0.3)"
 
         mask = self.apply_threshold(C)

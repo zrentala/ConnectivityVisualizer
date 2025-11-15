@@ -200,7 +200,7 @@ def create_viz_controls(id_prefix: str, n_mat: int) -> html.Div:
     
     min_max_input_group = html.Div(
         [
-            dbc.Label("Connection range (0-1)"),
+            dbc.Label("Color Range (0-1)"),
             html.Div(
                 dcc.RangeSlider(
                     id="conn-range",
