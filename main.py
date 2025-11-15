@@ -17,13 +17,13 @@ from utils.global_app_state import GlobalAppState
 def create_app(global_state: GlobalAppState) -> Dash:  
     """Create and initialize the Dash application."""
     app = Dash(__name__, external_stylesheets=[dbc.themes.CYBORG], suppress_callback_exceptions=True)
-    n_mat = global_state.data.conn_matrices.shape[0]
+    n_mat = global_state.brain_data.conn_mat.shape[0]
     
     # Create initial 2D figure for display
     viz = ConnectivityVisualizer(
         global_state.brain_data
     )
-    initial_fig = viz.figure_2d()
+    initial_fig = viz.get_figure(global_state.brain_data)
     
     app.layout = create_layout(
         initial_fig=initial_fig,
