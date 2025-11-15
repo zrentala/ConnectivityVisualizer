@@ -279,8 +279,8 @@ class ConnectivityVisualizer:
         return pts[:, 0], pts[:, 1], pts[:, 2]
 
     # ---------- Public API ----------
-    def apply_threshold(self) -> np.ndarray:
-        conn_normalized = (self.conn - np.min(self.conn)) / (np.max(self.conn) - np.min(self.conn) + 1e-12)
+    def apply_threshold(self, C: np.ndarray) -> np.ndarray:
+        conn_normalized = (C - np.min(C)) / (np.max(C) - np.min(C) + 1e-12)
         
         if self.threshold_type == "Basic":
             # Convert percentage to normalized threshold
@@ -289,12 +289,16 @@ class ConnectivityVisualizer:
         elif self.threshold_type == "Statistical Test":
             # Convert percentage to normalized threshold
             norm_alpha = self.alpha / 100.0
-            return thresh.get_stattest_mask(self.conn, norm_alpha)
+            return thresh.get_stattest_mask(conn_normalized, norm_alpha)
         elif self.threshold_type == "MST" or self.threshold_type == "Minimum Spanning Tree":  # Minimum Spanning Tree
-            return thresh.get_mst_map(self.conn)
+            return thresh.get_mst_map(conn_normalized)
     
 
     # ---------- Utils ----------
+    def get_conn_matrix(self, brain_data: BrainData) -> np.ndarray:
+        C = brain_data.conn_mat[self.conn_idx, :, : ].copy()
+        return C
+    
     def update_xyz(
         self,
         chanlocs: Union[pd.DataFrame, Iterable[Union[Channel, dict, Iterable]]]
@@ -380,7 +384,7 @@ class ConnectivityVisualizer:
     def update_fields(
         self,
         *,
-        brain_data: BrainData,
+        brain_data: Optional[BrainData] = None,
         viz_type: Optional[str] = None,
         conn_idx: Optional[int] = None,
         thresh_type: Optional[str] = None,
@@ -421,21 +425,17 @@ class ConnectivityVisualizer:
                 curvature=0.25,
                 lw_min=0.5,
                 lw_max=4.0,
-                title=None,
+                # title=None,
             )
         elif self.viz_type == "3D":
             return self.figure_3d(
                 brain_data=brain_data,
-                use_arcs=True,
-                R=None,
-                lw_min=0.5,
-                lw_max=4.0,
-                title=None,
+                # title=None,
             )
         elif self.viz_type == "Heatmap":
             return self.figure_heatmap(
-                brain_data=brain_data.brain_data,
-                title=None,
+                brain_data=brain_data,
+                # title=None,
             )
         else:
             return go.Figure()
@@ -459,13 +459,13 @@ class ConnectivityVisualizer:
             threshold: Basic threshold value (absolute) or percentage (if threshold_type is set)
             threshold_type: If set to "Basic" or "Minimum Spanning Tree", applies that thresholding
         """
-        C = self.conn.copy()
+        C = self.get_conn_matrix(brain_data)
         np.fill_diagonal(C, 0.0)
         
         # Apply thresholding if specified
         if self.threshold_type:
             # apply_threshold expects threshold as percentage when threshold_type == 'Basic'
-            mask = self.apply_threshold()
+            mask = self.apply_threshold(C)
             C = C * mask
         
         scale = self._max_conn_scale(C)
@@ -602,9 +602,9 @@ class ConnectivityVisualizer:
         """
         
         # Get connectivity matrix (potentially thresholded)
-        C = self.conn.copy()
+        C = self.get_conn_matrix(brain_data)
         if self.threshold_type:
-            mask = self.apply_threshold()
+            mask = self.apply_threshold(C)
             C = C * mask
         
         np.fill_diagonal(C, 0.0)
@@ -656,7 +656,7 @@ class ConnectivityVisualizer:
 
         for i in range(self.n):
             p0 = self.xyz[i]
-            targets = range(self.n) if brain_data.directed else range(i + 1, self.n)
+            targets = range(self.n) if brain_data.is_directed else range(i + 1, self.n)
             for j in targets:
                 if i == j:
                     continue
@@ -669,7 +669,7 @@ class ConnectivityVisualizer:
 
                 # map signed value to 0..1 over data_min..data_max then apply conn window
                 t_global = (w - data_min) / max((data_max - data_min), 1e-12)
-                adj = (t_global - self.conn_min) / max((self.conn_max - self.onn_min), 1e-12)
+                adj = (t_global - self.conn_min) / max((self.conn_max - self.conn_min), 1e-12)
                 adj = float(np.clip(adj, 0.0, 1.0))
 
                 p1 = self.xyz[j]
@@ -809,10 +809,10 @@ class ConnectivityVisualizer:
             threshold: Threshold value (absolute) or percentage (if threshold_type is set)
             threshold_type: If set to "Basic" or "Minimum Spanning Tree", applies that thresholding
         """
-        C = np.array(brain_data.conn, dtype=float)
+        C = self.get_conn_matrix(brain_data)
         bg_color = "rgba(230,230,230,0.3)"
 
-        mask = self.apply_threshold()
+        mask = self.apply_threshold(C)
         C = C * mask
 
         # Color range: compute full-data min/max then map conn_min/conn_max (0..1) into that range

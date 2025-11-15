@@ -8,10 +8,10 @@ from utils.global_app_state import GlobalAppState
 
 def register_visualization_callback(app: Dash, global_state: GlobalAppState):
     """Register callback to update visualization based on matrix index, threshold, and viz type."""
-    n_frames = int(global_state.data.conn_matrices.shape[0])
-    conn_matrices = global_state.data.conn_matrices
-    chanlocs = global_state.chanlocs
-    brain_mesh = global_state.brain_mesh
+    n_frames = int(global_state.brain_data.conn_mat.shape[0])
+    # conn_matrices = global_state.brain_data.conn_mat
+    # chanlocs = global_state.brain_data.chanlocs
+    # brain_mesh = global_state.brain_data.brain_mesh
 
     @app.callback(
         Output("main-visualization", "figure"),

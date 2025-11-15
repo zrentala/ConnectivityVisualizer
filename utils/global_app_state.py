@@ -13,7 +13,7 @@ class GlobalAppState:
         self.app = Dash(__name__, external_stylesheets=[dbc.themes.CYBORG])
         
         # ---- Simulated data ----
-        cfg = {"n_elec": 10, "directed": False, "n_mat": 10}
+        cfg = {"n_elec": 205, "directed": False, "n_mat": 10}
         data = Simulation(cfg)
         
         chanlocs = pd.DataFrame(

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 @dataclass
 class BrainData:
     """Class to hold brain data parameters for visualization."""
-    conn_mat: np.ndarray
+    conn_mat: np.ndarray # Connectivity matrices, shape (n_matrices, n_nodes, n_nodes)
     chanlocs: pd.DataFrame
     brain_mesh: pv.PolyData
     n_nodes: int
