@@ -2,48 +2,50 @@ from dash import html, dcc
 import dash_bootstrap_components as dbc
 from dataclasses import dataclass
 
-@dataclass(frozen=True)
-class VizConfig:
-    graph_height: str = "70vh"
-    id_prefix: str = "viz"
+# @dataclass(frozen=True)
+# class VizConfig:
+#     graph_height: str = "70vh"
+#     id_prefix: str = "viz"
 
 
-class VizTabsBuilder:
-    def __init__(self, config: VizConfig | None = None):
-        self.config = config or VizConfig()
-        self._id_map = {}
+# class VizTabsBuilder:
+#     def __init__(self, config: VizConfig | None = None):
+#         self.config = config or VizConfig()
+#         self._id_map = {}
 
-    def graph_id(self, label: str) -> str:
-        key = label.lower().replace(" ", "-")
-        return f"{self.config.id_prefix}-{key}"
+#     def graph_id(self, label: str) -> str:
+#         key = label.lower().replace(" ", "-")
+#         return f"{self.config.id_prefix}-{key}"
 
-    def create_viz_tabs(self, viz_dict) -> dbc.Card:
-        """
-        viz_dict: {label: figure}
-        """
-        self._id_map.clear()
-        tabs = []
+#     def create_viz_tabs(self, viz_dict) -> dbc.Card:
+#         """
+#         viz_dict: {label: figure}
+#         """
+#         self._id_map.clear()
+#         tabs = []
 
-        for label, fig in viz_dict.items():
-            gid = self.graph_id(label)
-            self._id_map[label] = gid
+#         for label, fig in viz_dict.items():
+#             gid = self.graph_id(label)
+#             self._id_map[label] = gid
 
-            tabs.append(
-                dbc.Tab(
-                    dcc.Graph(
-                        id=gid,
-                        figure=fig,
-                        style={"height": self.config.graph_height},
-                    ),
-                    label=label,
-                )
-            )
+#             tabs.append(
+#                 dbc.Tab(
+#                     dcc.Graph(
+#                         id=gid,
+#                         figure=fig,
+#                         style={"height": self.config.graph_height},
+#                     ),
+#                     label=label,
+#                 )
+#             )
 
-        return dbc.Card(dbc.Tabs(tabs))
+#         return dbc.Card(dbc.Tabs(tabs))
 
-    @property
-    def id_map(self):
-        return dict(self._id_map)
+#     @property
+#     def id_map(self):
+#         return dict(self._id_map)
+
+container_class = "p-3 my-3 rounded shadow-sm border border-dark"
 
 def create_slider(id: str, n_frames: int, label: str = "Frame") -> html.Div:
     """Create a slider for selecting connectivity matrix index."""
@@ -61,7 +63,7 @@ def create_slider(id: str, n_frames: int, label: str = "Frame") -> html.Div:
                 marks={0: "0", n_frames: str(n_frames - 1)} if n_frames > 1 else None,
             ),
         ],
-        className="m-3",
+        # className="m-3",
     )
 
 def create_thesh_component(id: str, label: str = "Threshold") -> html.Div:
@@ -132,7 +134,7 @@ def create_thesh_component(id: str, label: str = "Threshold") -> html.Div:
                 className="mt-2",
             ),
         ],
-        className="p-3 my-3 rounded shadow-sm border border-dark",
+        className=container_class,
     )
 
 def create_dropdown(id: str, options: list[dict], label: str = "Select Option", default: str = None) -> html.Div:
@@ -151,6 +153,7 @@ def create_dropdown(id: str, options: list[dict], label: str = "Select Option", 
     )
 
 def create_viz_controls(id_prefix: str, n_mat: int) -> html.Div:
+    
     viz_type_options = [
         {"label": "2D", "value": "2D"},
         {"label": "3D", "value": "3D"},
@@ -222,5 +225,172 @@ def create_viz_controls(id_prefix: str, n_mat: int) -> html.Div:
             color_map_dropdown,
             min_max_input_group],
         fluid=True,
-        className="p-3 my-3 rounded shadow-sm border border-dark",
+        className=container_class,
+    )
+
+
+def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
+    """Create data selection component with add/load dataset controls."""
+    # Slider over connectivity matrices
+    animation_slider = create_slider(
+        id=f"{id_prefix}-mat-idx",
+        n_frames=n_mat,
+        label="Connectivity Matrix Index",
+    )
+
+    # Label that shows either "No dataset loaded" or current dataset name
+    data_label = html.Span(
+        id=f"{id_prefix}-dataset-label",
+        children="No dataset loaded",
+        className="ms-2",
+    )
+
+    # "+" button to add / replace data
+    add_data_button = dbc.Button(
+        "+",
+        id=f"{id_prefix}-add-data-btn",
+        color="primary",
+        size="sm",
+        className="ms-2",
+        title="Add or replace dataset",
+        n_clicks=0,
+    )
+
+    # Modal that appears when you click the "+" button
+    data_modal = dbc.Modal(
+        [
+            dbc.ModalHeader("Add or replace dataset"),
+            dbc.ModalBody(
+                [
+                    # 1) Load your own
+                    html.H5("1. Load your own data"),
+                    dcc.Upload(
+                        id=f"{id_prefix}-upload",
+                        children=html.Div(
+                            [
+                                "Drag and drop or ",
+                                html.A("select a file"),
+                            ]
+                        ),
+                        multiple=False,
+                        className="border p-3 text-center mb-3",
+                    ),
+
+                    html.Hr(),
+
+                    # 2) Choose from preset
+                    html.H5("2. Choose a preset dataset"),
+                    dcc.Dropdown(
+                        id=f"{id_prefix}-preset-dropdown",
+                        placeholder="Select preset dataset...",
+                        options=[
+                            {"label": "Small undirected (n=10, mats=5)", "value": "small_undirected"},
+                            {"label": "Medium directed (n=20, mats=10)", "value": "medium_directed"},
+                            {"label": "Large undirected (n=64, mats=20)", "value": "large_undirected"},
+                        ],
+                        clearable=True,
+                        className="mb-3",
+                    ),
+
+                    html.Hr(),
+
+                    # 3) Generate your own
+                    html.H5("3. Generate simulated data"),
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                [
+                                    dbc.Label("Number of nodes"),
+                                    dbc.Input(
+                                        id=f"{id_prefix}-gen-n-elec",
+                                        type="number",
+                                        min=2,
+                                        step=1,
+                                        value=20,
+                                    ),
+                                ],
+                                md=4,
+                            ),
+                            dbc.Col(
+                                [
+                                    dbc.Label("Number of mats"),
+                                    dbc.Input(
+                                        id=f"{id_prefix}-gen-n-mat",
+                                        type="number",
+                                        min=1,
+                                        step=1,
+                                        value=10,
+                                    ),
+                                ],
+                                md=4,
+                            ),
+                            dbc.Col(
+                                [
+                                    dbc.Label("Directed?"),
+                                    dbc.Checkbox(
+                                        id=f"{id_prefix}-gen-directed",
+                                        value=False,
+                                    ),
+                                ],
+                                # md=4,
+                                className="d-flex align-items-end",
+                            ),
+                        ],
+                        className="mb-2",
+                    ),
+                    dbc.Button(
+                        "Generate",
+                        id=f"{id_prefix}-gen-btn",
+                        color="secondary",
+                        className="mt-2",
+                        n_clicks=0,
+                    ),
+                ]
+            ),
+            dbc.ModalFooter(
+                dbc.Button(
+                    "Close",
+                    id=f"{id_prefix}-data-modal-close",
+                    className="ms-auto",
+                    n_clicks=0,
+                )
+            ),
+        ],
+        id=f"{id_prefix}-data-modal",
+        is_open=False,
+        centered=True,
+        backdrop="static",
+    )
+
+    # Store to keep current dataset metadata (name, source, etc.)
+    data_store = dcc.Store(
+        id=f"{id_prefix}-data-store",
+        data={
+            "name": None,
+            "source": None,  # "simulated", "uploaded", "preset"
+        },
+    )
+
+    # Layout: dataset controls row + slider + modal + store
+    return dbc.Container(
+        children=[
+            dbc.Row(
+                [
+                    dbc.Col(
+                        [
+                            dbc.Label("Dataset:"),
+                            data_label,
+                            add_data_button,
+                        ],
+                        width="auto",
+                    )
+                ],
+                className="mb-3",
+            ),
+            animation_slider,
+            data_modal,
+            data_store,
+        ],
+        fluid=True,
+        className=container_class,
     )
