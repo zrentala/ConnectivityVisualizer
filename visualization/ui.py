@@ -1,22 +1,23 @@
 # visualization/ui.py
 from dash import html, dcc
 import dash_bootstrap_components as dbc
-from interaction.ui_controls import create_slider, create_thesh_component, create_viz_controls
+from interaction.ui_controls import create_slider, create_thesh_component, create_viz_controls, create_data_component
 import dash_split_pane as dsp
 
 
 def create_layout(n_mat, initial_fig):
     """Responsive layout that fits the viewport and keeps margins/padding (no fixed pixels)."""
-    animation_slider = create_slider(id="mat-idx", n_frames=n_mat, label="Connectivity Matrix Index")
     threshold_comp = create_thesh_component(id="thresh-comp", label="Threshold")
     viz_controls = create_viz_controls(id_prefix="main", n_mat=n_mat)
+    data_component = create_data_component(id_prefix= "data-comp", n_mat= n_mat)
 
     left = html.Div(
         [
             html.H3("Controls / Info Panel", className="mb-3"),
             html.H4("Visualization Controls"),
             viz_controls,
-            animation_slider,
+            html.H4("Data Controls"),
+            data_component,
             html.H4("Threshold Controls"),
             threshold_comp,
         ],

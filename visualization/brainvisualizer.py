@@ -470,11 +470,8 @@ class ConnectivityVisualizer:
         
         scale = self._max_conn_scale(C)
         # data range (signed) for mapping t in [0,1]
-        if np.any(np.isfinite(C)):
-            data_min = float(np.nanmin(C))
-            data_max = float(np.nanmax(C))
-        else:
-            data_min, data_max = -1.0, 1.0
+        data_min = 0 if np.min(C) >= 0 else -1
+        data_max = 0 if np.max(C) < 0 else 1.0
         # Map normalized conn_min/conn_max (0..1) into actual data range for colorbar limits
         zmin = data_min + float(np.clip(self.conn_min, 0.0, 1.0)) * (data_max - data_min)
         zmax = data_min + float(np.clip(self.conn_max, 0.0, 1.0)) * (data_max - data_min)
