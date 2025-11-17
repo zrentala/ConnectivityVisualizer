@@ -1,22 +1,38 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
 import numpy as np
 import pandas as pd
 import pyvista as pv
-from dataclasses import dataclass
+
 
 @dataclass
 class BrainData:
-    """Class to hold brain data parameters for visualization."""
-    conn_mat: np.ndarray # Connectivity matrices, shape (n_matrices, n_nodes, n_nodes)
+    """
+    Container for brain connectivity and geometry for visualization.
+    Only core inputs are stored; derived fields are computed automatically.
+    """
+    conn_mat: np.ndarray
     chanlocs: pd.DataFrame
     brain_mesh: pv.PolyData
-    n_nodes: int
-    directed: bool
-    labels: np.ndarray
+    directed: bool = False
 
-    def __init__(self, conn_mat: np.ndarray, chanlocs: pd.DataFrame, brain_mesh: pv.PolyData, directed: bool = False):
-        self.conn_mat = conn_mat
-        self.chanlocs = chanlocs
-        self.brain_mesh = brain_mesh
-        self.n_nodes = conn_mat.shape[0]
-        self.is_directed = directed
-        self.labels = chanlocs['label'].values
+    # Derived fields populated post-init
+    n_nodes: int = field(init=False)
+    labels: np.ndarray = field(init=False)
+
+    def __post_init__(self):
+        # Validate inputs
+        if self.conn_mat.ndim > 3:
+            raise ValueError("conn_mat must be a 2D matrix (n_nodes × n_nodes).")
+
+        if self.conn_mat.shape[1] != self.conn_mat.shape[2]:
+            raise ValueError("conn_mat must be square.")
+
+        if "label" not in self.chanlocs.columns:
+            raise KeyError("chanlocs must have a 'label' column.")
+
+        # Compute derived fields
+        self.n_nodes = self.conn_mat.shape[0]
+        self.labels = self.chanlocs["label"].values

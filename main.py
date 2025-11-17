@@ -12,6 +12,7 @@ from visualization.ui import create_layout
 from data.simulation import Simulation
 from interaction.callbacks import register_callbacks
 from utils.global_app_state import GlobalAppState
+from analysis.threshold import Threshold
         
 
 def create_app(global_state: GlobalAppState) -> Dash:  
@@ -23,7 +24,7 @@ def create_app(global_state: GlobalAppState) -> Dash:
     viz = ConnectivityVisualizer(
         global_state.brain_data
     )
-    initial_fig = viz.get_figure(global_state.brain_data)
+    initial_fig = viz.get_figure(global_state.brain_data, global_state.threshold)
     
     app.layout = create_layout(
         initial_fig=initial_fig,

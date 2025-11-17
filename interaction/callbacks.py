@@ -2,11 +2,12 @@ from dash import Input, Output, State, Dash, no_update, callback_context
 import numpy as np
 import plotly.graph_objects as go
 import plotly.colors as plc
-from data.loader import DataLoader, PRESET_CONFIGS  # adjust import path if needed
+from data.loaders import DataLoader, PRESET_CONFIGS  # adjust import path if needed
 
 
 from visualization.brainvisualizer import ConnectivityVisualizer
 from utils.global_app_state import GlobalAppState
+from utils.update import update_attributes
 
 # NEW:
 from data.simulation import Simulation
@@ -58,36 +59,29 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             conn_min, conn_max = 0.0, 1.0
 
         # viz = ConnectivityVisualizer(conn_mat[idx], chanlocs, brain_mesh=brain_mesh)
+        threshold_updates = {
+            "threshold_type": thresh_type,
+            "threshold": thresh_value,
+            "alpha": alpha,
+        }
 
-        viz = global_state.viz
-        viz.update_fields(
-            brain_data=global_state.brain_data,
-            viz_type=viz_type,
-            conn_idx=idx,
-            thresh_type=thresh_type,
-            thresh_value=thresh_value,
-            color_name=color_name,
-            conn_min=conn_min,
-            conn_max=conn_max,
-            alpha=alpha,
-        )
+        viz_updates = {
+            "conn_idx": idx,
+            "viz_type": viz_type,
+            "colorscale": color_name,
+            "conn_min": conn_min,
+            "conn_max": conn_max,
+            "update_xyz": global_state.brain_data.chanlocs,
+        }
 
-        fig = viz.get_figure(brain_data=global_state.brain_data)
+        update_attributes(global_state.threshold, **threshold_updates)
+        update_attributes(global_state.viz, **viz_updates)
+
+        fig = global_state.viz.get_figure(brain_data=global_state.brain_data, threshold=global_state.threshold)
         cmap = _map_colors_for_name(color_name)
         fig.update_layout(uirevision="keep")
         return fig
-        # if viz_type == "2D":
-        #     fig = _build_2d_figure(viz, thresh_type, thresh_value, color_name, conn_min, conn_max, alpha)
-        # elif viz_type == "3D":
-        #     fig = _build_3d_figure(viz, thresh_type, thresh_value, color_name, conn_min, conn_max, alpha)
-        # elif viz_type == "Heatmap":
-        #     fig = _build_heatmap_figure(viz, thresh_type, thresh_value, color_name, conn_min, conn_max, alpha)
-        # else:
-        #     fig = go.Figure()
-
-        # fig.update_layout(uirevision="keep")
-        # return fig
-
+    
 def _brain_data_from_sim(cfg: dict) -> BrainData:
     sim = Simulation(cfg)
     chanlocs = pd.DataFrame(
