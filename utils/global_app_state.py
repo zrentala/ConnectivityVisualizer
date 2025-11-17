@@ -4,6 +4,7 @@ from visualization.brainvisualizer import ConnectivityVisualizer
 from dash import Dash
 import pandas as pd
 from utils.braindata import BrainData
+from analysis.threshold import Threshold
 
 class GlobalAppState:
     """Global application state - stores data and configuration."""
@@ -28,6 +29,7 @@ class GlobalAppState:
         brain_mesh = data.build_brain_mesh()
         self.brain_data = BrainData(data.conn_matrices, chanlocs, brain_mesh)
         self.viz = ConnectivityVisualizer(self.brain_data)
+        self.threshold = Threshold()
         
         
         # No pre-computed figures - they are generated on demand in callbacks
