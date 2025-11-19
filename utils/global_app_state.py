@@ -28,6 +28,9 @@ class GlobalAppState:
 
         brain_mesh = data.build_brain_mesh()
         self.brain_data = BrainData(data.conn_matrices, chanlocs, brain_mesh)
-        self.viz = ConnectivityVisualizer(self.brain_data)
+        # print( self.brain_data)
         self.threshold = Threshold()
-        self.viz.get_figure(self.brain_data, self.threshold)
+        self.viz = ConnectivityVisualizer(self.brain_data, self.threshold)
+        # print(self.viz)
+        
+        # self.viz.get_figure(self.brain_data, self.threshold)

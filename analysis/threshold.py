@@ -26,7 +26,7 @@ class Threshold:
         For 'Statistical Test', interpreted as a percentage (0-100).
     """
     threshold: float = 0.5
-    threshold_type: Optional[str] = None
+    threshold_type: str = "Basic"
     alpha: float = 5.0   # percent (5% default)
 
     # ------------------------------------------------------------------
