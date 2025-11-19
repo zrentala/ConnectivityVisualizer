@@ -54,9 +54,9 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
 
         # conn_range is expected to be a two-element sequence [min, max]
         try:
-            conn_min, conn_max = float(conn_range[0]), float(conn_range[1])
+            color_min, color_max = float(conn_range[0]), float(conn_range[1])
         except Exception:
-            conn_min, conn_max = 0.0, 1.0
+            color_min, color_max = 0.0, 1.0
 
         # viz = ConnectivityVisualizer(conn_mat[idx], chanlocs, brain_mesh=brain_mesh)
         threshold_updates = {
@@ -69,8 +69,8 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             "conn_idx": idx,
             "viz_type": viz_type,
             "colorscale": color_name,
-            "conn_min": conn_min,
-            "conn_max": conn_max,
+            "color_min": color_min,
+            "color_max": color_max,
             "update_xyz": global_state.brain_data.chanlocs,
         }
 

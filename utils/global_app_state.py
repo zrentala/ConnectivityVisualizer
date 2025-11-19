@@ -30,6 +30,4 @@ class GlobalAppState:
         self.brain_data = BrainData(data.conn_matrices, chanlocs, brain_mesh)
         self.viz = ConnectivityVisualizer(self.brain_data)
         self.threshold = Threshold()
-        
-        
-        # No pre-computed figures - they are generated on demand in callbacks
+        self.viz.get_figure(self.brain_data, self.threshold)
