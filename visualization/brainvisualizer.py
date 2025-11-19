@@ -358,11 +358,46 @@ class ConnectivityVisualizer:
         ys =  ys / (np.max(np.abs(ys)) + 1e-12) * 0.9
         self.xy_topo = np.column_stack([xs, ys])
 
-    def get_figure(self, brain_data: BrainData) -> go.Figure:
+    def get_figure(self, brain_data: BrainData, threshold: Threshold) -> go.Figure:
+        """Get the current figure based on viz_type."""
+        if self.viz_type == "2D":
+            if not self.fig_2d_cache or self.fig_2d_cache.layout == {}:
+                print("Building 2d figure cache")
+                self.fig_2d_cache = self.build_figure(
+                    brain_data=brain_data,
+                    threshold=threshold,
+                )
+            # else update cache
+            return self.fig_2d_cache
+        elif self.viz_type == "3D":
+            if not self.fig_3d_cache or self.fig_3d_cache.layout == {}:
+                print("Building 3d figure cache")
+                self.fig_3d_cache = self.build_figure(
+                    brain_data=brain_data,
+                    threshold=threshold,
+                )
+            # else update cache
+            return self.fig_3d_cache
+        elif self.viz_type == "Heatmap":
+            if not self.fig_heatmap_cache or self.fig_heatmap_cache.layout == {}:
+                print("Building heatmap figure cache")
+                self.fig_heatmap_cache = self.build_figure_heatmap(
+                    brain_data=brain_data,
+                    threshold=threshold,
+                )
+            else:
+                self.fig_heatmap_cache = self.update_figure_heatmap(brain_data=brain_data, threshold=threshold)
+            return self.fig_heatmap_cache
+        else:
+            print("Unknown viz_type; returning empty figure")
+            return go.Figure()
+        
+    def build_figure(self, brain_data: BrainData, threshold: Threshold) -> go.Figure:
         """Get the current figure based on viz_type."""
         if self.viz_type == "2D":
             return self.figure_2d(
                 brain_data=brain_data,
+                threshold=threshold,
                 use_arcs=True,
                 curvature=0.25,
                 lw_min=0.5,
@@ -372,12 +407,40 @@ class ConnectivityVisualizer:
         elif self.viz_type == "3D":
             return self.figure_3d(
                 brain_data=brain_data,
+                threshold=threshold,
                 # title=None,
             )
         elif self.viz_type == "Heatmap":
-            return self.figure_heatmap(
+            return self.build_figure_heatmap(
                 brain_data=brain_data,
+                threshold=threshold,
                 # title=None,
+            )
+        else:
+            return go.Figure()
+        
+    def update_figure(self, brain_data: BrainData, threshold: Threshold) -> go.Figure:
+        """Get the current figure based on viz_type."""
+        if self.viz_type == "2D":
+            return self.figure_2d(
+                brain_data=brain_data,
+                threshold=threshold,
+                use_arcs=True,
+                curvature=0.25,
+                lw_min=0.5,
+                lw_max=4.0,
+                # title=None,
+            )
+        elif self.viz_type == "3D":
+            return self.figure_3d(
+                brain_data=brain_data,
+                threshold=threshold,
+                # title=None,
+            )
+        elif self.viz_type == "Heatmap":
+            return self.update_figure_heatmap(
+                brain_data=brain_data,
+                threshold=threshold,
             )
         else:
             return go.Figure()
@@ -1024,6 +1087,7 @@ class ConnectivityVisualizer:
         threshold: Threshold,
         brain_data: BrainData,
     ) -> go.Figure:
+        print("Building heatmap figure HERE")
         C = self.get_mat_at_idx(brain_data)
         bg_color = "rgba(230,230,230,0.3)"
 
@@ -1045,7 +1109,8 @@ class ConnectivityVisualizer:
             showscale=False,
             xgap=0.5,
             ygap=0.5,
-            hoverinfo="skip"
+            hoverinfo="skip",
+            name="background"
         ))
 
         # --- Main heatmap ---
@@ -1061,6 +1126,7 @@ class ConnectivityVisualizer:
             colorbar=dict(title="Conn"),
             showscale=True,
             hovertemplate="From %{y}<br>To %{x}<br>Value=%{z:.3f}<extra></extra>",
+            name="main"
         ))
 
         # Layout styling
@@ -1087,8 +1153,8 @@ class ConnectivityVisualizer:
     def update_figure_heatmap(
         self,
         *,
-        threshold: Threshold,
         brain_data: BrainData,
+        threshold: Threshold,
     ) -> go.Figure:
         C = self.get_mat_at_idx(brain_data)
         bg_color = "rgba(230,230,230,0.3)"
@@ -1096,56 +1162,15 @@ class ConnectivityVisualizer:
         mask = threshold.apply_threshold(C)
         C = C * mask
 
-        # Color range: compute full-data min/max then map color_min/color_max (0..1) into that range
         scale, data_min, data_max, zmin, zmax = self._get_scale_and_range(C)
 
-        # --- Background layer: faint grid of boxes ---
-        bg = np.full_like(C, np.nan)
-        bg[np.isnan(C)] = 0  # only fill where data is missing
-
-        self.fig_heatmap_cache.add_trace(go.Heatmap(
-            z=bg,
-            x=self.labels,
-            y=self.labels,
-            colorscale=[[0, bg_color], [1, bg_color]],  # constant faint gray
-            showscale=False,
-            xgap=0.5,
-            ygap=0.5,
-            hoverinfo="skip"
-        ))
-
-        # --- Main heatmap ---
-        self.fig_heatmap_cache.add_trace(go.Heatmap(
+        self.fig_heatmap_cache.update_traces(
             z=C,
-            x=self.labels,
-            y=self.labels,
-            colorscale=self.colorscale,
             zmin=zmin,
             zmax=zmax,
-            xgap=0.5,
-            ygap=0.5,
-            colorbar=dict(title="Conn"),
-            showscale=True,
-            hovertemplate="From %{y}<br>To %{x}<br>Value=%{z:.3f}<extra></extra>",
-        ))
-
-        # Layout styling
-        self.fig_heatmap_cache.update_layout(
-            xaxis=dict(
-                title="To",
-                tickangle=45,
-                showgrid=False,
-                zeroline=False,
-            ),
-            yaxis=dict(
-                title="From",
-                autorange="reversed",
-                showgrid=False,
-                zeroline=False,
-            ),
-            autosize=True,
-            margin=dict(l=60, r=20, t=40, b=80),
-            plot_bgcolor="white",
+            colorscale=self.colorscale,
+            selector=dict(name="main"),
         )
+
 
         return self.fig_heatmap_cache

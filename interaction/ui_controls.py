@@ -2,49 +2,6 @@ from dash import html, dcc
 import dash_bootstrap_components as dbc
 from dataclasses import dataclass
 
-# @dataclass(frozen=True)
-# class VizConfig:
-#     graph_height: str = "70vh"
-#     id_prefix: str = "viz"
-
-
-# class VizTabsBuilder:
-#     def __init__(self, config: VizConfig | None = None):
-#         self.config = config or VizConfig()
-#         self._id_map = {}
-
-#     def graph_id(self, label: str) -> str:
-#         key = label.lower().replace(" ", "-")
-#         return f"{self.config.id_prefix}-{key}"
-
-#     def create_viz_tabs(self, viz_dict) -> dbc.Card:
-#         """
-#         viz_dict: {label: figure}
-#         """
-#         self._id_map.clear()
-#         tabs = []
-
-#         for label, fig in viz_dict.items():
-#             gid = self.graph_id(label)
-#             self._id_map[label] = gid
-
-#             tabs.append(
-#                 dbc.Tab(
-#                     dcc.Graph(
-#                         id=gid,
-#                         figure=fig,
-#                         style={"height": self.config.graph_height},
-#                     ),
-#                     label=label,
-#                 )
-#             )
-
-#         return dbc.Card(dbc.Tabs(tabs))
-
-#     @property
-#     def id_map(self):
-#         return dict(self._id_map)
-
 container_class = "p-3 my-3 rounded shadow-sm border border-dark"
 
 def create_slider(id: str, n_frames: int, label: str = "Frame") -> html.Div:
