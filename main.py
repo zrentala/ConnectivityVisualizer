@@ -20,7 +20,8 @@ def create_app(global_state: GlobalAppState) -> Dash:
     app = Dash(__name__, external_stylesheets=[dbc.themes.CYBORG], suppress_callback_exceptions=True)
     n_mat = global_state.brain_data.conn_mat.shape[0]
     
-    initial_fig = global_state.viz.get_figure(global_state.brain_data, global_state.threshold)
+    initial_fig = global_state.viz.get_figure()
+    # print(initial_fig)
     app.layout = create_layout(
         initial_fig=initial_fig,
         n_mat=n_mat,

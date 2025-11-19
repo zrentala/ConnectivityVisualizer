@@ -23,16 +23,25 @@ class BrainData:
     labels: np.ndarray = field(init=False)
 
     def __post_init__(self):
-        # Validate inputs
-        if self.conn_mat.ndim > 3:
-            raise ValueError("conn_mat must be a 2D matrix (n_nodes × n_nodes).")
-
-        if self.conn_mat.shape[1] != self.conn_mat.shape[2]:
-            raise ValueError("conn_mat must be square.")
+        if self.conn_mat.ndim == 3:
+            n_mat, n1, n2 = self.conn_mat.shape
+            if n1 != n2:
+                raise ValueError("For 3D conn_mat, last two dims must be square: (n_mat, n_nodes, n_nodes).")
+            n_nodes = n1
+        elif self.conn_mat.ndim == 2:
+            n1, n2 = self.conn_mat.shape
+            if n1 != n2:
+                raise ValueError("2D conn_mat must be square (n_nodes × n_nodes).")
+            n_nodes = n1
+        else:
+            raise ValueError("conn_mat must be 2D or 3D (n_mat, n_nodes, n_nodes).")
 
         if "label" not in self.chanlocs.columns:
             raise KeyError("chanlocs must have a 'label' column.")
+        if len(self.chanlocs) != n_nodes:
+            raise ValueError(
+                f"chanlocs has {len(self.chanlocs)} rows but conn_mat implies {n_nodes} nodes."
+            )
 
-        # Compute derived fields
-        self.n_nodes = self.conn_mat.shape[0]
+        self.n_nodes = n_nodes
         self.labels = self.chanlocs["label"].values
