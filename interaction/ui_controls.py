@@ -75,7 +75,7 @@ def create_thesh_component(id: str, label: str = "Threshold") -> html.Div:
     )
 
     """Create a threshold input component with optional slider."""
-    return dbc.Container(
+    return html.Div(
         children =[
             thresh_dropdown,
             html.Div(
