@@ -639,12 +639,25 @@ class ConnectivityVisualizer:
         for tr in edge_traces:
             fig.add_trace(tr)
 
-        # build a map from "A1,A2" to trace index
-        self._edge_trace_idx = {}
+        # ---- Rebuild a positional map: (i, j) -> trace index ----
+        self._edge2d_trace_idx = {}
+        labels = self.labels
+        label_to_idx = {lab: i for i, lab in enumerate(labels)}
+
         for k, tr in enumerate(fig.data):
             name = getattr(tr, "name", None)
-            if name and "," in name:
-                self._edge_trace_idx[name] = k
+            if not name or "," not in name:
+                continue
+
+            try:
+                a, b = name.split(",")
+                i = label_to_idx.get(a)
+                j = label_to_idx.get(b)
+                if i is not None and j is not None:
+                    self._edge2d_trace_idx[(i, j)] = k
+            except Exception:
+                continue
+
 
         # Colorbar (invisible marker with colorscale)
         try:
@@ -695,13 +708,14 @@ class ConnectivityVisualizer:
         np.fill_diagonal(C, 0.0)
         # print(mask)
         # print("Update 2d")
-
+        # print("HEREL::")
         scale, data_min, data_max, zmin, zmax = self._get_scale_and_range(C)
         labels = self.labels
 
         # Use batch_update to avoid repeated property rebuilds
         with fig.batch_update():
-            for (i, j), idx in self._edge3d_trace_idx.items():
+            # print("HEREERER")
+            for (i, j), idx in self._edge2d_trace_idx.items():
                 if i == j:
                     continue
 
@@ -709,14 +723,16 @@ class ConnectivityVisualizer:
                 m = mask[i, j]
                 edge_name = f"{labels[i]},{labels[j]}"
                 # print(f"{labels[i]},{labels[j]}")
-
-                # idx = self._edge_trace_idx.get(edge_name)
-                # if idx is None:
-                #     continue  # should not happen if build/setup is consistent
+                # print(i)
+                # print(j)
+                # print(m)
+                if idx is None:
+                    continue  # should not happen if build/setup is consistent
 
                 trace = fig.data[idx]
-
+                
                 if not m:
+                    # print("HERE")
                     trace.opacity = 0.0
                     trace.hoverinfo = "skip"   # no hover at all
                     trace.text = ""            # clear label
