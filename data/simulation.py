@@ -21,7 +21,7 @@ class Simulation:
                 conn = (conn + conn.T) / 2
             np.fill_diagonal(conn, 0)
             conns[i] = conn
-
+        print(conns.shape)
         return conns
 
     def generate_locs(self):

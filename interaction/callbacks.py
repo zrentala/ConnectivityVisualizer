@@ -70,7 +70,7 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             "colorscale": color_name,
             "color_min": color_min,
             "color_max": color_max,
-            "xyz": global_state.brain_data.chanlocs,
+            "update_xyz": global_state.brain_data.chanlocs,
             "viz_type": viz_type
         }
 
@@ -78,6 +78,7 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         update_attributes(global_state.viz, **viz_updates)
 
         fig = global_state.viz.update_figure(brain_data=global_state.brain_data, threshold=global_state.threshold)
+        # print(fig)
         cmap = _map_colors_for_name(color_name)
         fig.update_layout(uirevision="keep")
         return fig

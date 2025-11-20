@@ -14,12 +14,13 @@ def create_layout(n_mat, initial_fig):
     left = html.Div(
         [
             html.H3("Controls / Info Panel", className="mb-3"),
-            html.H4("Visualization Controls"),
-            viz_controls,
             html.H4("Data Controls"),
             data_component,
+            html.H4("Visualization Controls"),
+            viz_controls,
             html.H4("Threshold Controls"),
             threshold_comp,
+            html.H4("Graph Controls"),
         ],
         className="bg-light p-3 rounded shadow-sm",
         style={"height": "100%", "overflowY": "auto"},
