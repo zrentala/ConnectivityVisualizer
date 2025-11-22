@@ -5,16 +5,15 @@ import plotly.colors as plc
 from data.loaders import DataLoader, PRESET_CONFIGS  # adjust import path if needed
 
 
-from visualization.brainvisualizer import ConnectivityVisualizer
+from visualization.brainvisualizer import ConnectivityVisualizer, UpdateType
 from utils.global_app_state import GlobalAppState
 from utils.update import update_attributes
+from analysis.threshold import Threshold
 
 # NEW:
 from data.simulation import Simulation
 from utils.braindata import BrainData
 import pandas as pd
-import base64
-import io
 
 PRESET_CONFIGS = {
     "small_undirected": {"n_elec": 10, "directed": False, "n_mat": 5},
@@ -70,14 +69,60 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             "colorscale": color_name,
             "color_min": color_min,
             "color_max": color_max,
-            "update_xyz": global_state.brain_data.chanlocs,
+            # "update_xyz": global_state.brain_data.chanlocs,
             "viz_type": viz_type
         }
 
+        def determine_update_type(
+            viz,
+            threshold: Threshold,
+            updates: dict
+        ) -> UpdateType:
+            """
+            Determine what type of update is required given:
+            - viz: ConnectivityVisualizer instance
+            - threshold: Threshold instance
+            - updates: dict with new UI parameters
+            """
+
+            # ---------------------------------------------------------
+            # 1. Check visualization-related changes → FULL UPDATE
+            # ---------------------------------------------------------
+            color_fields = ["colorscale", "color_min", "color_max"]
+            for field in color_fields:
+                if getattr(viz, field) != updates[field]:
+                    return UpdateType.ALL
+
+            # ---------------------------------------------------------
+            # 2. Check threshold-related changes → THRESHOLD update
+            # ---------------------------------------------------------
+            # threshold fields to compare
+            threshold_fields = ["threshold", "threshold_type", "alpha"]
+
+            for field in threshold_fields:
+                if getattr(threshold, field) != updates[field]:
+                    return UpdateType.THRESHOLD
+
+            # Also include conn_idx in threshold update logic:
+            if viz.conn_idx != updates["conn_idx"]:
+                return UpdateType.THRESHOLD
+
+            # ---------------------------------------------------------
+            # 3. No update needed
+            # ---------------------------------------------------------
+            return UpdateType.NONE
+
+
+        update_type = determine_update_type(
+            global_state.viz,
+            global_state.threshold,
+            threshold_updates | viz_updates
+        )
+        print(update_type)
         update_attributes(global_state.threshold, **threshold_updates)
         update_attributes(global_state.viz, **viz_updates)
 
-        fig = global_state.viz.update_figure(brain_data=global_state.brain_data, threshold=global_state.threshold)
+        fig = global_state.viz.update_figure(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type)
         # print(fig)
         cmap = _map_colors_for_name(color_name)
         fig.update_layout(uirevision="keep")

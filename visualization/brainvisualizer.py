@@ -10,13 +10,23 @@ import plotly.colors as plc
 import analysis.threshold as thresh
 from utils.braindata import BrainData
 from analysis.threshold import Threshold
+from itertools import product
+from enum import Enum, auto
+
 
 try:
     import pyvista as pv
 except Exception:  # make pv optional
     pv = None
 
-# 
+
+class UpdateType(Enum):
+    NONE=auto()
+    XYZ=auto()
+    THRESHOLD=auto()
+    ALL=auto()
+
+
 def _rgba_from_color(col: str, strength: float) -> str:
     """Return an 'rgba(r,g,b,a)' string for a given hex or named color and strength in [0,1].
 
@@ -166,12 +176,12 @@ class ConnectivityVisualizer:
         self.update_xyz(brain_data.chanlocs)
 
         # caches
+        self.mask_cache = None 
+        self._edge2d_trace_idx = {}
         self._base_2d_traces: Optional[List[go.Scattergl]] = None
         self.fig_2d_cache = self.build_figure_2d(brain_data=brain_data, threshold=threshold)
         self.fig_3d_cache = self.build_figure_3d(brain_data=brain_data, threshold=threshold)
         self.fig_heatmap_cache = self.build_figure_heatmap(brain_data=brain_data, threshold=threshold)
-        # ---- derived / cached fields ----
-
 
     # --------- Boilerplate ----------
 
@@ -399,22 +409,25 @@ class ConnectivityVisualizer:
         else:
             return go.Figure()
         
-    def update_figure(self, brain_data: BrainData, threshold: Threshold) -> go.Figure:
+    def update_figure(self, brain_data: BrainData, threshold: Threshold, update_type: UpdateType) -> go.Figure:
         """Get the current figure based on viz_type."""
         if self.viz_type == "2D":
             return self.update_figure_2d(
                 brain_data=brain_data,
                 threshold=threshold,
+                update_type=update_type
             )
         elif self.viz_type == "3D":
             return self.update_figure_3d(
                 brain_data=brain_data,
                 threshold=threshold,
+                update_type=update_type
             )
         elif self.viz_type == "Heatmap":
             return self.update_figure_heatmap(
                 brain_data=brain_data,
                 threshold=threshold,
+                update_type=update_type
             )
         else:
             return go.Figure()
@@ -507,19 +520,32 @@ class ConnectivityVisualizer:
         # self._scale_range_cache[key] = (scale, (data_min, data_max))
         return scale, data_min, data_max, zmin, zmax
 
-    def _get_candidate_edges(self, C: np.ndarray) -> List[Tuple[int, int]]:
+    def _get_candidate_edges(self, old_mask: np.ndarray, new_mask: np.ndarray, update_type: UpdateType) -> List[Tuple[Tuple[int, int], int]]:
         """
-        Precompute which (i,j) pairs have non-trivial weights (finite, > eps).
+        Return a list of ((i, j), trace_idx) pairs that need updating.
+        Uses minimal overhead while integrating UpdateType logic.
         """
-        # key = id(C)
-        # if key in self._edge_index_cache:
-        #     return self._edge_index_cache[key]
 
-        mask = np.isfinite(C) & (np.abs(C) >= 1e-12)
-        i_idx, j_idx = np.where(mask)
-        edges = list(zip(i_idx.tolist(), j_idx.tolist()))
-        # self._edge_index_cache[key] = edges
-        return edges
+        # ---- 1. FULL UPDATE: update every edge ----
+        if update_type is UpdateType.ALL:
+            return list(self._edge2d_trace_idx.items())
+
+        # ---- 2. THRESHOLD UPDATE: only edges where mask changed ----
+        if update_type is UpdateType.THRESHOLD:
+            diff = old_mask != new_mask  # vectorized diff between old and new masks
+            print(self.mask_cache)
+            print(new_mask)
+            changed_edges = []
+            for (i, j), trace_idx in self._edge2d_trace_idx.items():
+                if diff[i, j]:  # changed mask value
+                    changed_edges.append(((i, j), trace_idx))
+
+            return changed_edges
+
+        # ---- 3. NONE ----
+        return []
+
+
 
     # ------------------------------------------------------------------
     # Edges builder
@@ -545,8 +571,9 @@ class ConnectivityVisualizer:
         edge_traces: List[go.Scattergl] = []
         labels = self.labels
 
-        # Loop only over candidate edges (non-trivial entries)
-        for i, j in self._get_candidate_edges(C):
+        #  LOOP OVER EVERYTHING< NEED TO FIX LATER
+        
+        for i, j in product(range(brain_data.n_nodes), repeat=2):
             if i == j:
                 continue
             w = C[i, j]
@@ -625,6 +652,8 @@ class ConnectivityVisualizer:
         """
         # Get connectivity matrix for current index/state
         C = self.get_mat_at_idx(brain_data)
+        _, mask = threshold.apply_threshold(brain_data, self.conn_idx)
+        self.mask_cache = mask
 
         # Base figure with static traces
         fig = go.Figure()
@@ -640,7 +669,6 @@ class ConnectivityVisualizer:
             fig.add_trace(tr)
 
         # ---- Rebuild a positional map: (i, j) -> trace index ----
-        self._edge2d_trace_idx = {}
         labels = self.labels
         label_to_idx = {lab: i for i, lab in enumerate(labels)}
 
@@ -702,7 +730,7 @@ class ConnectivityVisualizer:
 
         return fig
 
-    def update_figure_2d( self, *, brain_data: BrainData, threshold: Threshold, lw_min: float = 0.5, lw_max: float = 4.0, ) -> go.Figure:
+    def update_figure_2d( self, *, brain_data: BrainData, threshold: Threshold, lw_min: float = 0.5, lw_max: float = 4.0, update_type:UpdateType) -> go.Figure:
         fig = self.fig_2d_cache
         C, mask = threshold.apply_threshold(brain_data, self.conn_idx)
         np.fill_diagonal(C, 0.0)
@@ -715,7 +743,14 @@ class ConnectivityVisualizer:
         # Use batch_update to avoid repeated property rebuilds
         with fig.batch_update():
             # print("HEREERER")
-            for (i, j), idx in self._edge2d_trace_idx.items():
+            old_mask = self.mask_cache
+            self.mask_cache = mask.copy()
+
+            traces_list = self._get_candidate_edges(old_mask, mask, update_type)
+
+
+            
+            for (i, j), idx in traces_list:
                 if i == j:
                     continue
 
@@ -977,6 +1012,7 @@ class ConnectivityVisualizer:
         threshold: Threshold,
         line_width: float = 3.0,
         opacity: float = 0.6,
+        update_type:UpdateType
     ) -> go.Figure:
         """Restyle edges and colorbar in the existing 3D figure without rebuilding geometry."""
         fig = self.fig_3d_cache
@@ -1121,6 +1157,7 @@ class ConnectivityVisualizer:
         *,
         brain_data: BrainData,
         threshold: Threshold,
+        update_type:UpdateType
     ) -> go.Figure:
         # print("Updating heatmap figure HERE")
         bg_color = "rgba(230,230,230,0.3)"
