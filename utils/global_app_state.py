@@ -31,6 +31,7 @@ class GlobalAppState:
         # print( self.brain_data)
         self.threshold = Threshold()
         self.viz = ConnectivityVisualizer(self.brain_data, self.threshold)
+        print("instantiated")
         # print(self.viz)
         
         # self.viz.get_figure(self.brain_data, self.threshold)

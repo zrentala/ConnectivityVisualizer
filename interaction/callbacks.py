@@ -120,11 +120,8 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         )
         print(update_type)
         update_attributes(global_state.threshold, **threshold_updates)
-        update_attributes(global_state.viz, **viz_updates)
-
-        fig = global_state.viz.update_figure(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type)
-        # print(fig)
-        cmap = _map_colors_for_name(color_name)
+        global_state.viz.update(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type, viz_updates=viz_updates)
+        fig = global_state.viz.get_figure()
         fig.update_layout(uirevision="keep")
         return fig
     

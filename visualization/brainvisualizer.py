@@ -180,10 +180,11 @@ class ConnectivityVisualizer:
         self.mask_cache = None 
         self._edge2d_trace_idx = {}
         self._base_2d_traces: Optional[List[go.Scattergl]] = None
-        self.fig_2d_cache = self.build_figure_2d(brain_data=brain_data, threshold=threshold)
-        self.fig_3d_cache = self.build_figure_3d(brain_data=brain_data, threshold=threshold)
-        self.fig_heatmap_cache = self.build_figure_heatmap(brain_data=brain_data, threshold=threshold)
-
+        self.fig_2d_cache = None
+        self.fig_3d_cache = None
+        self.fig_heatmap_cache = None
+        self.build_figure(brain_data=brain_data, threshold=threshold)
+        print("Built")
     # --------- Boilerplate ----------
 
     def __repr__(self) -> str:
@@ -287,6 +288,18 @@ class ConnectivityVisualizer:
         pts = center[None, :] + R * cs[:, None] * u[None, :] + R * ss[:, None] * v[None, :]
         return pts[:, 0], pts[:, 1], pts[:, 2]
     # ---------- Utils ----------
+    def update(self, brain_data, threshold, update_type, viz_updates):
+        self.conn_idx = viz_updates["conn_idx"]
+        self.colorscale = viz_updates["colorscale"]
+        self.color_max = viz_updates["color_max"]
+        self.color_min = viz_updates["color_min"]
+        
+        if self.viz_type != viz_updates["viz_type"]:
+            self.viz_type = viz_updates["viz_type"]
+            self.build_figure(brain_data, threshold)
+        else:
+            self.update_figure(brain_data=brain_data, threshold=threshold, update_type=update_type)
+
     def get_mat_at_idx(self, brain_data: BrainData) -> np.ndarray:
         C = brain_data.conn_mat[self.conn_idx, :, : ].copy()
         return C
@@ -385,8 +398,11 @@ class ConnectivityVisualizer:
 
     def build_figure(self, brain_data: BrainData, threshold: Threshold) -> go.Figure:
         """Get the current figure based on viz_type."""
+        self.fig_2d_cache = None
+        self.fig_3d_cache = None
+        self.fig_heatmap_cache = None
         if self.viz_type == "2D":
-            return self.build_figure_2d(
+            fig = self.build_figure_2d(
                 brain_data=brain_data,
                 threshold=threshold,
                 use_arcs=True,
@@ -395,18 +411,24 @@ class ConnectivityVisualizer:
                 lw_max=4.0,
                 # title=None,
             )
+            self.fig_2d_cache = fig
+            return fig
         elif self.viz_type == "3D":
-            return self.build_figure_3d(
+            fig = self.build_figure_3d(
                 brain_data=brain_data,
                 threshold=threshold,
                 # title=None,
             )
+            self.fig_3d_cache = fig
+            return fig
         elif self.viz_type == "Heatmap":
-            return self.build_figure_heatmap(
+            fig = self.build_figure_heatmap(
                 brain_data=brain_data,
                 threshold=threshold,
                 # title=None,
             )
+            self.fig_heatmap_cache = fig
+            return fig
         else:
             return go.Figure()
         
@@ -844,8 +866,8 @@ class ConnectivityVisualizer:
         """
         # Get connectivity matrix (apply threshold only for initial view)
         C = self.get_mat_at_idx(brain_data)
-        # mask = threshold.apply_threshold(C)
-        # C = C * mask
+        _, mask = threshold.apply_threshold(brain_data, self.conn_idx)
+        self.mask_cache = mask
         np.fill_diagonal(C, 0.0)
 
         fig = go.Figure()
@@ -1055,6 +1077,10 @@ class ConnectivityVisualizer:
 
         with fig.batch_update():
             # restyle per-edge traces
+            old_mask = self.mask_cache
+            self.mask_cache = mask.copy()
+
+            traces_list = self._get_candidate_edges(old_mask, mask, update_type, brain_data)
             for (i, j), idx in self._edge3d_trace_idx.items():
                 w = float(C[i, j])
                 m = mask[i, j]
