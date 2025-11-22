@@ -297,8 +297,9 @@ class ConnectivityVisualizer:
         if self.viz_type != viz_updates["viz_type"]:
             self.viz_type = viz_updates["viz_type"]
             self.build_figure(brain_data, threshold)
-        else:
-            self.update_figure(brain_data=brain_data, threshold=threshold, update_type=update_type)
+        
+        self.update_figure(brain_data=brain_data, threshold=threshold, update_type=update_type)
+        # inefficient?? building then updating?
 
     def get_mat_at_idx(self, brain_data: BrainData) -> np.ndarray:
         C = brain_data.conn_mat[self.conn_idx, :, : ].copy()
@@ -601,7 +602,8 @@ class ConnectivityVisualizer:
     ) -> List[go.Scattergl]:
         """Create edge traces for the given connectivity matrix C."""
         # Threshold and mask
-        C, mask = threshold.apply_threshold(brain_data, self.conn_idx)
+        # C, mask = threshold.apply_threshold(brain_data, self.conn_idx)
+        C = self.get_mat_at_idx(brain_data)
         np.fill_diagonal(C, 0.0)
 
         scale, data_min, data_max, zmin, zmax = self._get_scale_and_range(C)
