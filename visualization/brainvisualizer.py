@@ -24,6 +24,7 @@ class UpdateType(Enum):
     NONE=auto()
     XYZ=auto()
     THRESHOLD=auto()
+    COLOR=auto()
     ALL=auto()
 
 
@@ -479,12 +480,7 @@ class ConnectivityVisualizer:
         )
 
         return [head, nose, nodes]
-
-    def _get_base_2d_traces(self) -> List[go.Scattergl]:
-        # if self._base_2d_traces is None:
-        #     self._base_2d_traces = self._build_2d_head_traces()
-        return self._build_base_2d_traces()
-
+    
     def _get_edge_path(self, i: int, j: int, use_arcs: bool, curvature: float) -> np.ndarray:
         """Return cached polyline for edge (i,j)."""
         # key = (i, j, use_arcs, float(curvature))
@@ -520,32 +516,52 @@ class ConnectivityVisualizer:
         # self._scale_range_cache[key] = (scale, (data_min, data_max))
         return scale, data_min, data_max, zmin, zmax
 
-    def _get_candidate_edges(self, old_mask: np.ndarray, new_mask: np.ndarray, update_type: UpdateType) -> List[Tuple[Tuple[int, int], int]]:
-        """
-        Return a list of ((i, j), trace_idx) pairs that need updating.
-        Uses minimal overhead while integrating UpdateType logic.
-        """
+    def _get_candidate_edges(self, old_mask, new_mask, update_type, brain_data: BrainData):
+        n = brain_data.n_nodes
+        directed = brain_data.directed
 
-        # ---- 1. FULL UPDATE: update every edge ----
+        ij_iter = self.get_ij_iter(n, directed)
+
+        # ---- ALL ----
         if update_type is UpdateType.ALL:
-            return list(self._edge2d_trace_idx.items())
-
-        # ---- 2. THRESHOLD UPDATE: only edges where mask changed ----
-        if update_type is UpdateType.THRESHOLD:
-            diff = old_mask != new_mask  # vectorized diff between old and new masks
-            print(self.mask_cache)
-            print(new_mask)
-            changed_edges = []
-            for (i, j), trace_idx in self._edge2d_trace_idx.items():
-                if diff[i, j]:  # changed mask value
-                    changed_edges.append(((i, j), trace_idx))
-
+            changed_edges = [
+                ((i, j), self._edge2d_trace_idx[(i, j)])
+                for (i, j) in ij_iter
+                if (i, j) in self._edge2d_trace_idx
+            ]
+            print(f"Number edges:{len(changed_edges)}")
             return changed_edges
 
-        # ---- 3. NONE ----
+        # ---- COLOR ----
+        if update_type is UpdateType.COLOR:
+            changed_edges = [
+                ((i, j), self._edge2d_trace_idx[(i, j)])
+                for (i, j) in ij_iter
+                if new_mask[i, j] and (i, j) in self._edge2d_trace_idx
+            ]
+            print(f"Number edges:{len(changed_edges)}")
+            return changed_edges
+
+        # ---- THRESHOLD ----
+        if update_type is UpdateType.THRESHOLD:
+            diff = (old_mask != new_mask)
+            changed_edges = [
+                ((i, j), self._edge2d_trace_idx[(i, j)])
+                for (i, j) in ij_iter
+                if diff[i, j] and (i, j) in self._edge2d_trace_idx
+            ]
+            print(f"Number edges:{len(changed_edges)}")
+            return changed_edges
+
         return []
 
 
+    def get_ij_iter(self, n_nodes: int, is_directed: bool) -> List[Tuple[int, int]]:
+        if is_directed:
+            return product(range(n_nodes), repeat=2)
+        else:
+            return ((i, j) for i in range(n_nodes)
+                for j in range(i + 1, n_nodes))
 
     # ------------------------------------------------------------------
     # Edges builder
@@ -572,8 +588,9 @@ class ConnectivityVisualizer:
         labels = self.labels
 
         #  LOOP OVER EVERYTHING< NEED TO FIX LATER
-        
-        for i, j in product(range(brain_data.n_nodes), repeat=2):
+        ij_iter = self.get_ij_iter(brain_data.n_nodes, brain_data.directed) 
+
+        for i, j in ij_iter:
             if i == j:
                 continue
             w = C[i, j]
@@ -657,7 +674,7 @@ class ConnectivityVisualizer:
 
         # Base figure with static traces
         fig = go.Figure()
-        for tr in self._get_base_2d_traces():
+        for tr in self._build_base_2d_traces():
             fig.add_trace(tr)
         edge_traces, (zmin, zmax) = self._build_edge_traces(brain_data=brain_data, threshold=threshold,
             use_arcs=brain_data.directed,
@@ -746,7 +763,7 @@ class ConnectivityVisualizer:
             old_mask = self.mask_cache
             self.mask_cache = mask.copy()
 
-            traces_list = self._get_candidate_edges(old_mask, mask, update_type)
+            traces_list = self._get_candidate_edges(old_mask, mask, update_type, brain_data)
 
 
             
@@ -807,6 +824,7 @@ class ConnectivityVisualizer:
                     tr.marker.color = [zmin, zmax]
                     break
         self.fig_2d_cache = fig
+        print("FINISH UPDATING 2D")
         return fig
 
     def build_figure_3d(

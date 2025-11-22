@@ -91,7 +91,7 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             color_fields = ["colorscale", "color_min", "color_max"]
             for field in color_fields:
                 if getattr(viz, field) != updates[field]:
-                    return UpdateType.ALL
+                    return UpdateType.COLOR
 
             # ---------------------------------------------------------
             # 2. Check threshold-related changes → THRESHOLD update
