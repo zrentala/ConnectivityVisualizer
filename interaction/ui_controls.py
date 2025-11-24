@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 container_class = "p-3 my-3 rounded shadow-sm border border-dark"
 
-def create_slider(id: str, n_frames: int, label: str = "Frame") -> html.Div:
+def create_slider(id: str, min:float, max:float, step: float, label: str = "Frame") -> html.Div:
     """Create a slider for selecting connectivity matrix index."""
     return html.Div(
         [
@@ -13,7 +13,7 @@ def create_slider(id: str, n_frames: int, label: str = "Frame") -> html.Div:
                 id=id,
                 min=0,
                 max=max(n_frames - 1, 0),
-                step=1,
+                step=step,
                 value=0,
                 updatemode="mouseup",
                 tooltip={"placement": "bottom", "always_visible": True},
