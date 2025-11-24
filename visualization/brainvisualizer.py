@@ -626,7 +626,7 @@ class ConnectivityVisualizer:
 
         return scale, data_min, data_max, zmin, zmax
 
-
+    ### THIS ONLY WORKS FOR 2D not 3D
     def _get_candidate_edges(self, old_mask, new_mask, update_type, brain_data: BrainData):
         n = brain_data.n_nodes
         directed = brain_data.directed
