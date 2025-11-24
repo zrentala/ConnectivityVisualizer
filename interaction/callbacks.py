@@ -21,59 +21,7 @@ PRESET_CONFIGS = {
     "large_undirected": {"n_elec": 64, "directed": False, "n_mat": 20},
 }
 
-
-def register_visualization_callback(app: Dash, global_state: GlobalAppState):
-    """Register callback to update visualization based on matrix index, threshold, and viz type."""
-    n_frames = int(global_state.brain_data.conn_mat.shape[0])
-    # conn_mat = global_state.brain_data.conn_mat
-    # chanlocs = global_state.brain_data.chanlocs
-    # brain_mesh = global_state.brain_data.brain_mesh
-
-    @app.callback(
-        Output("main-visualization", "figure"),
-        Input("data-comp-mat-idx", "value"),
-        # threshold type dropdown (Basic / MST / Statistical Test)
-        Input("thresh-comp-type-dropdown", "value"),
-        # numeric threshold slider (percent)
-        Input("thresh-comp-slider", "value"),
-        Input("viz-type-dropdown", "value"),
-        Input("color-type-dropdown", "value"),
-        Input("conn-range", "value"),
-        # alpha slider inside the statistical-test subcomponent
-        Input("thresh-comp-alpha-slider", "value"),
-        prevent_initial_call=False,
-    )
-    def update_visualization(idx, thresh_type, thresh_value, viz_type, color_name, conn_range, alpha):
-        """Update the main visualization figure.
-
-        The signature must match the decorated Inputs exactly.
-        """
-        idx = int(np.clip(idx or 0, 0, n_frames - 1))
-        viz_type = (viz_type or "2D")
-
-        # conn_range is expected to be a two-element sequence [min, max]
-        try:
-            color_min, color_max = float(conn_range[0]), float(conn_range[1])
-        except Exception:
-            color_min, color_max = 0.0, 1.0
-
-        # viz = ConnectivityVisualizer(conn_mat[idx], chanlocs, brain_mesh=brain_mesh)
-        threshold_updates = {
-            "threshold_type": thresh_type,
-            "threshold": thresh_value,
-            "alpha": alpha,
-        }
-
-        viz_updates = {
-            "conn_idx": idx,
-            "colorscale": color_name,
-            "color_min": color_min,
-            "color_max": color_max,
-            # "update_xyz": global_state.brain_data.chanlocs,
-            "viz_type": viz_type
-        }
-
-        def determine_update_type(
+def determine_update_type(
             viz,
             threshold: Threshold,
             updates: dict
@@ -113,17 +61,200 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             return UpdateType.NONE
 
 
+def register_visualization_callback(app: Dash, global_state: GlobalAppState):
+    n_frames = int(global_state.brain_data.conn_mat.shape[0])
+    @app.callback(
+        Output("main-visualization", "figure"),
+        # Data component
+        Input("data-comp-mat-idx", "value"),
+        # threshold type dropdown (Basic / MST / Statistical Test)
+        Input("thresh-comp-type-dropdown", "value"),
+        # numeric threshold slider (percent)
+        Input("thresh-comp-slider", "value"),
+        Input("viz-type-dropdown", "value"),
+        Input("color-type-dropdown", "value"),
+        Input("conn-range", "value"),
+        # alpha slider inside the statistical-test subcomponent
+        Input("thresh-comp-alpha-slider", "value"),
+        # 2D visualization options
+        Input("main-node-size-2d", "value"),
+        Input("main-edge-min-2s", "value"),
+        Input("main-edge-max-2d", "value"),
+
+        # 3D visualization options
+        Input("main-node-size-3d", "value"),
+        Input("main-edge-min-3d", "value"),
+        Input("main-edge-max-3d", "value"),
+        Input("main-arc-points-3d", "value"),
+        Input("main-show-left-3d", "value"),
+        Input("main-show-right-3d", "value"),
+        prevent_initial_call=False,
+    )
+    def update_visualization(idx, thresh_type, thresh_value, viz_type, color_name, conn_range, alpha, node_size_2d, edge_min_2d, edge_max_2d, node_size_3d, edge_min_3d, edge_max_3d, arc_points_3d, show_hemi_right_3d, show_hemi_left_3d):
+
+        """Update the main visualization figure.
+
+        The signature must match the decorated Inputs exactly.
+        """
+        idx = int(np.clip(idx or 0, 0, n_frames - 1))
+        viz_type = (viz_type or "2D")
+
+        # conn_range is expected to be a two-element sequence [min, max]
+        try:
+            color_min, color_max = float(conn_range[0]), float(conn_range[1])
+        except Exception:
+            color_min, color_max = 0.0, 1.0
+
+
+        # -----------------------------
+        # Build update flags
+        # -----------------------------
+        viz_updates = {
+            "conn_idx": idx,
+            "colorscale": color_name,
+            "color_min": color_min,
+            "color_max": color_max,
+            # "update_xyz": global_state.brain_data.chanlocs,
+            "viz_type": viz_type,
+            "node_size_2d": node_size_2d,
+            "edge_min_2d": edge_min_2d,
+            "edge_max_2d": edge_max_2d,
+
+            "node_size_3d": node_size_3d,
+            "edge_min_3d": edge_min_3d,
+            "edge_max_3d": edge_max_3d,
+            "arc_points_3d": arc_points_3d,
+
+            "show_hemi_left_3d": show_hemi_left_3d,
+            "show_hemi_right_3d": show_hemi_right_3d,
+        }
+
+        threshold_updates = {
+            "threshold_type": thresh_type,
+            "threshold": thresh_value,
+            "alpha": alpha,
+        }
+
+        # -----------------------------
+        # Determine update type
+        # -----------------------------
         update_type = determine_update_type(
             global_state.viz,
             global_state.threshold,
             threshold_updates | viz_updates
         )
-        print(update_type)
+
+        # -----------------------------
+        # Run the visualization update
+        # -----------------------------
         update_attributes(global_state.threshold, **threshold_updates)
         global_state.viz.update(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type, viz_updates=viz_updates)
         fig = global_state.viz.get_figure()
         fig.update_layout(uirevision="keep")
         return fig
+    
+# def register_visualization_callback(app: Dash, global_state: GlobalAppState):
+#     """Register callback to update visualization based on matrix index, threshold, and viz type."""
+#     n_frames = int(global_state.brain_data.conn_mat.shape[0])
+#     # conn_mat = global_state.brain_data.conn_mat
+#     # chanlocs = global_state.brain_data.chanlocs
+#     # brain_mesh = global_state.brain_data.brain_mesh
+
+#     @app.callback(
+#         Output("main-visualization", "figure"),
+#         Input("data-comp-mat-idx", "value"),
+#         # threshold type dropdown (Basic / MST / Statistical Test)
+#         Input("thresh-comp-type-dropdown", "value"),
+#         # numeric threshold slider (percent)
+#         Input("thresh-comp-slider", "value"),
+#         Input("viz-type-dropdown", "value"),
+#         Input("color-type-dropdown", "value"),
+#         Input("conn-range", "value"),
+#         # alpha slider inside the statistical-test subcomponent
+#         Input("thresh-comp-alpha-slider", "value"),
+#         prevent_initial_call=False,
+#     )
+#     def update_visualization(idx, thresh_type, thresh_value, viz_type, color_name, conn_range, alpha):
+#         """Update the main visualization figure.
+
+#         The signature must match the decorated Inputs exactly.
+#         """
+#         idx = int(np.clip(idx or 0, 0, n_frames - 1))
+#         viz_type = (viz_type or "2D")
+
+#         # conn_range is expected to be a two-element sequence [min, max]
+#         try:
+#             color_min, color_max = float(conn_range[0]), float(conn_range[1])
+#         except Exception:
+#             color_min, color_max = 0.0, 1.0
+
+#         # viz = ConnectivityVisualizer(conn_mat[idx], chanlocs, brain_mesh=brain_mesh)
+#         threshold_updates = {
+#             "threshold_type": thresh_type,
+#             "threshold": thresh_value,
+#             "alpha": alpha,
+#         }
+
+#         viz_updates = {
+#             "conn_idx": idx,
+#             "colorscale": color_name,
+#             "color_min": color_min,
+#             "color_max": color_max,
+#             # "update_xyz": global_state.brain_data.chanlocs,
+#             "viz_type": viz_type
+#         }
+
+#         def determine_update_type(
+#             viz,
+#             threshold: Threshold,
+#             updates: dict
+#         ) -> UpdateType:
+#             """
+#             Determine what type of update is required given:
+#             - viz: ConnectivityVisualizer instance
+#             - threshold: Threshold instance
+#             - updates: dict with new UI parameters
+#             """
+
+#             # ---------------------------------------------------------
+#             # 1. Check visualization-related changes → FULL UPDATE
+#             # ---------------------------------------------------------
+#             color_fields = ["colorscale", "color_min", "color_max"]
+#             for field in color_fields:
+#                 if getattr(viz, field) != updates[field]:
+#                     return UpdateType.COLOR
+
+#             # ---------------------------------------------------------
+#             # 2. Check threshold-related changes → THRESHOLD update
+#             # ---------------------------------------------------------
+#             # threshold fields to compare
+#             threshold_fields = ["threshold", "threshold_type", "alpha"]
+
+#             for field in threshold_fields:
+#                 if getattr(threshold, field) != updates[field]:
+#                     return UpdateType.THRESHOLD
+
+#             # Also include conn_idx in threshold update logic:
+#             if viz.conn_idx != updates["conn_idx"]:
+#                 return UpdateType.THRESHOLD
+
+#             # ---------------------------------------------------------
+#             # 3. No update needed
+#             # ---------------------------------------------------------
+#             return UpdateType.NONE
+
+
+#         update_type = determine_update_type(
+#             global_state.viz,
+#             global_state.threshold,
+#             threshold_updates | viz_updates
+#         )
+#         print(update_type)
+#         update_attributes(global_state.threshold, **threshold_updates)
+#         global_state.viz.update(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type, viz_updates=viz_updates)
+#         fig = global_state.viz.get_figure()
+#         fig.update_layout(uirevision="keep")
+#         return fig
     
 def _brain_data_from_sim(cfg: dict) -> BrainData:
     sim = Simulation(cfg)
