@@ -112,8 +112,7 @@ def create_2d_options(id_prefix: str) -> html.Div:
     node_size_slider = create_slider(
         id=f"{id_prefix}-node-size-2d",
         label="Node Size",
-        min_val=1,
-        max_val=20,
+        n_frames=10,
         step=1,
         default=8,
     )
@@ -121,8 +120,7 @@ def create_2d_options(id_prefix: str) -> html.Div:
     edge_min_slider = create_slider(
         id=f"{id_prefix}-edge-min-2d",
         label="Edge Width (Min)",
-        min_val=0.1,
-        max_val=10,
+        n_frames=100,
         step=0.1,
         default=0.5,
     )
@@ -130,8 +128,7 @@ def create_2d_options(id_prefix: str) -> html.Div:
     edge_max_slider = create_slider(
         id=f"{id_prefix}-edge-max-2d",
         label="Edge Width (Max)",
-        min_val=0.1,
-        max_val=10,
+        n_frames=10,
         step=0.1,
         default=5.0,
     )
@@ -152,8 +149,7 @@ def create_3d_options(id_prefix: str) -> html.Div:
     node_size_slider = create_slider(
         id=f"{id_prefix}-node-size-3d",
         label="Node Size",
-        min_val=1,
-        max_val=20,
+        n_frames=20,
         step=1,
         default=8,
     )
@@ -161,8 +157,7 @@ def create_3d_options(id_prefix: str) -> html.Div:
     edge_min_slider = create_slider(
         id=f"{id_prefix}-edge-min-3d",
         label="Edge Width (Min)",
-        min_val=0.1,
-        max_val=10,
+        n_frames=10,
         step=0.1,
         default=0.5,
     )
@@ -170,8 +165,7 @@ def create_3d_options(id_prefix: str) -> html.Div:
     edge_max_slider = create_slider(
         id=f"{id_prefix}-edge-max-3d",
         label="Edge Width (Max)",
-        min_val=0.1,
-        max_val=10,
+        n_frames=10,
         step=0.1,
         default=5.0,
     )
@@ -179,9 +173,8 @@ def create_3d_options(id_prefix: str) -> html.Div:
     arc_points_slider = create_slider(
         id=f"{id_prefix}-arc-points-3d",
         label="Arc Curve Resolution (# Points)",
-        min_val=5,
-        max_val=200,
-        step=5,
+        n_frames=10,
+        step=1,
         default=50,
     )
 
@@ -237,11 +230,37 @@ def create_viz_controls(id_prefix: str, n_mat: int) -> html.Div:
         ],
     )
 
+    color_map_options = [
+        {"label": "Viridis", "value": "Viridis"},
+        {"label": "Cividis", "value": "Cividis"},
+        {"label": "Plasma", "value": "Plasma"},
+        {"label": "Inferno", "value": "Inferno"},
+        {"label": "Magma", "value": "Magma"},
+        {"label": "Turbo", "value": "Turbo"},
+        {"label": "Hot", "value": "Hot"},
+        {"label": "Cool", "value": "Cool"},
+        {"label": "Rainbow", "value": "Rainbow"},
+        {"label": "Cubehelix", "value": "Cubehelix"},
+        {"label": "Greys", "value": "Greys"},
+        {"label": "YlGnBu", "value": "YlGnBu"},
+        {"label": "RdBu", "value": "RdBu"},
+        {"label": "Picnic", "value": "Picnic"},
+        {"label": "Portland", "value": "Portland"},
+        {"label": "Jet", "value": "Jet"},
+        {"label": "Hotpink", "value": "Hotpink"},
+        {"label": "Electric", "value": "Electric"},
+        {"label": "Blackbody", "value": "Blackbody"},
+        {"label": "Earth", "value": "Earth"},
+        {"label": "Balance", "value": "Balance"},
+        {"label": "RdYlGn", "value": "RdYlGn"},
+        {"label": "Spectral", "value": "Spectral"},
+    ]
+
     color_map_dropdown = create_dropdown(
         id="color-type-dropdown",
         label="Color Map",
         default="Viridis",
-        options=viz_type_dropdown
+        options=color_map_options
     )
 
     color_range = html.Div(
