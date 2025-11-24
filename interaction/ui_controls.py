@@ -4,23 +4,28 @@ from dataclasses import dataclass
 
 container_class = "p-3 my-3 rounded shadow-sm border border-dark"
 
-def create_slider(id: str, min:float, max:float, step: float, label: str = "Frame") -> html.Div:
-    """Create a slider for selecting connectivity matrix index."""
+def create_slider(id: str, data_min: float, data_max: float, step: float,
+                  label: str = "Frame") -> html.Div:
+    """Create a slider for selecting a value within a numeric range."""
+    
+    # Ensure valid ordering
+    if data_max < data_min:
+        raise ValueError("data_max must be >= data_min")
+
     return html.Div(
         [
             dbc.Label(label),
             dcc.Slider(
                 id=id,
-                min=0,
-                max=max(n_frames - 1, 0),
+                min=data_min,
+                max=data_max,
                 step=step,
-                value=0,
+                value=data_min,
                 updatemode="mouseup",
                 tooltip={"placement": "bottom", "always_visible": True},
-                marks={0: "0", n_frames: str(n_frames - 1)} if n_frames > 1 else None,
+                marks={data_min: str(data_min), data_max: str(data_max)},
             ),
-        ],
-        # className="m-3",
+        ]
     )
 
 def create_thesh_component(id: str, label: str = "Threshold") -> html.Div:
@@ -37,25 +42,12 @@ def create_thesh_component(id: str, label: str = "Threshold") -> html.Div:
             label="Statistical Test Type",
             default="t",
         )
+
+        alpha_slider = create_slider(id, data_min=0, data_max=10, step=0.1, label="Alpha Level (%)")
         return html.Div(
             [
                 test_type_dropdown,
-                html.Div(
-                [
-                    dbc.Label("Alpha Level (%)"),
-                    dcc.Slider(
-                        id=f"{id}-alpha-slider",
-                        min=0,
-                        max=max(10 - 1, 0),
-                        step=0.1,
-                        value=0,
-                        updatemode="mouseup",
-                        tooltip={"placement": "bottom", "always_visible": True},
-                        marks={0: "0", 10: str(10 - 1)} if 10 > 1 else None,
-                    ),
-                ],
-                className="mt-3"
-                ),
+                alpha_slider,
             ],
             className="mt-2",
         )
@@ -81,7 +73,7 @@ def create_thesh_component(id: str, label: str = "Threshold") -> html.Div:
             html.Div(
                 id=f"{id}-slider-container",
                 children=[
-                    create_slider(id=f"{id}-slider", n_frames=100, label="Threshold Value (%)")
+                    create_slider(id=f"{id}-slider", data_min=0, data_max=100, step=1, label="Threshold Value (%)")
                 ],
                 className="mt-2",
             ),
@@ -108,30 +100,39 @@ def create_dropdown(id: str, options: list[dict], label: str = "Select Option", 
         ],
         className="mb-3",
     )
+
+def create_range_slider(id: str, data_min: float, data_max: float, step: float, default, label:str) -> html.Div:
+    # Compute midpoint
+    mid = data_min + (data_max - data_min) / 2
+
+    # Format labels nicely (avoid long decimals)
+    def fmt(x):
+        return f"{x:.3g}"  # adjust precision if needed
+
+    marks = {
+        data_min: fmt(data_min),
+        mid: fmt(mid),
+        data_max: fmt(data_max),
+    }
+    return html.Div(
+        [
+            dbc.Label(label),
+            dcc.RangeSlider(
+                id=id,
+                min=data_min,
+                max=data_max,
+                step=step,
+                value=default,
+                allowCross=False,
+                marks=marks,
+            ),
+        ]
+    )
+
 def create_2d_options(id_prefix: str) -> html.Div:
-    node_size_slider = create_slider(
-        id=f"{id_prefix}-node-size-2d",
-        label="Node Size",
-        n_frames=10,
-        step=1,
-        default=8,
-    )
+    node_size_slider = create_slider(id=f"{id_prefix}-node-size-2d", data_min=1, data_max=11, step=1, label="Node Size")
 
-    edge_min_slider = create_slider(
-        id=f"{id_prefix}-edge-min-2d",
-        label="Edge Width (Min)",
-        n_frames=100,
-        step=0.1,
-        default=0.5,
-    )
-
-    edge_max_slider = create_slider(
-        id=f"{id_prefix}-edge-max-2d",
-        label="Edge Width (Max)",
-        n_frames=10,
-        step=0.1,
-        default=5.0,
-    )
+    edge_width_range = create_range_slider(f"{id_prefix}-edge-width-range-2d", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0], label="Edge Width Size")
 
     return html.Div(
         id=f"{id_prefix}-options-2d",
@@ -139,43 +140,22 @@ def create_2d_options(id_prefix: str) -> html.Div:
             html.Hr(),
             html.H5("2D Visualization Options"),
             node_size_slider,
-            edge_min_slider,
-            edge_max_slider,
+            edge_width_range
         ],
         style={"display": "none"},
     )
 
 def create_3d_options(id_prefix: str) -> html.Div:
-    node_size_slider = create_slider(
-        id=f"{id_prefix}-node-size-3d",
-        label="Node Size",
-        n_frames=20,
-        step=1,
-        default=8,
-    )
+    node_size_slider = create_slider(id=f"{id_prefix}-node-size-3d", data_min=1, data_max=11, step=1, label="Node Size")
 
-    edge_min_slider = create_slider(
-        id=f"{id_prefix}-edge-min-3d",
-        label="Edge Width (Min)",
-        n_frames=10,
-        step=0.1,
-        default=0.5,
-    )
-
-    edge_max_slider = create_slider(
-        id=f"{id_prefix}-edge-max-3d",
-        label="Edge Width (Max)",
-        n_frames=10,
-        step=0.1,
-        default=5.0,
-    )
+    edge_width_range = create_range_slider(f"{id_prefix}-edge-width-range-3d", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0],label="Edge Width Size")
 
     arc_points_slider = create_slider(
         id=f"{id_prefix}-arc-points-3d",
         label="Arc Curve Resolution (# Points)",
-        n_frames=10,
+        data_min=1,
+        data_max=20,
         step=1,
-        default=50,
     )
 
     hemisphere_row = dbc.Row(
@@ -207,8 +187,7 @@ def create_3d_options(id_prefix: str) -> html.Div:
             html.Hr(),
             html.H5("3D Visualization Options"),
             node_size_slider,
-            edge_min_slider,
-            edge_max_slider,
+            edge_width_range,
             arc_points_slider,
             html.Br(),
             hemisphere_row,
@@ -263,20 +242,7 @@ def create_viz_controls(id_prefix: str, n_mat: int) -> html.Div:
         options=color_map_options
     )
 
-    color_range = html.Div(
-        [
-            dbc.Label("Color Range (0–1)"),
-            dcc.RangeSlider(
-                id="conn-range",
-                min=0,
-                max=1,
-                step=0.01,
-                value=[0.0, 1.0],
-                allowCross=False,
-                marks={0: "0.0", 0.5: "0.5", 1.0: "1.0"},
-            ),
-        ]
-    )
+    color_range = create_range_slider(id="conn-range", data_max=1, data_min=0, step=0.01, default=[0.0,1.0], label="Color Range")
 
     # 2D/3D option blocks
     options_2d = create_2d_options(id_prefix)
@@ -301,7 +267,9 @@ def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
     # Slider over connectivity matrices
     animation_slider = create_slider(
         id=f"{id_prefix}-mat-idx",
-        n_frames=n_mat,
+        data_max=n_mat-1,
+        data_min=0,
+        step=1,
         label="Connectivity Matrix Index",
     )
 
