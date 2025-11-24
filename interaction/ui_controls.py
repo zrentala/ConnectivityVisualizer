@@ -108,82 +108,173 @@ def create_dropdown(id: str, options: list[dict], label: str = "Select Option", 
         ],
         className="mb-3",
     )
+def create_2d_options(id_prefix: str) -> html.Div:
+    node_size_slider = create_slider(
+        id=f"{id_prefix}-node-size-2d",
+        label="Node Size",
+        min_val=1,
+        max_val=20,
+        step=1,
+        default=8,
+    )
+
+    edge_min_slider = create_slider(
+        id=f"{id_prefix}-edge-min-2d",
+        label="Edge Width (Min)",
+        min_val=0.1,
+        max_val=10,
+        step=0.1,
+        default=0.5,
+    )
+
+    edge_max_slider = create_slider(
+        id=f"{id_prefix}-edge-max-2d",
+        label="Edge Width (Max)",
+        min_val=0.1,
+        max_val=10,
+        step=0.1,
+        default=5.0,
+    )
+
+    return html.Div(
+        id=f"{id_prefix}-options-2d",
+        children=[
+            html.Hr(),
+            html.H5("2D Visualization Options"),
+            node_size_slider,
+            edge_min_slider,
+            edge_max_slider,
+        ],
+        style={"display": "none"},
+    )
+
+def create_3d_options(id_prefix: str) -> html.Div:
+    node_size_slider = create_slider(
+        id=f"{id_prefix}-node-size-3d",
+        label="Node Size",
+        min_val=1,
+        max_val=20,
+        step=1,
+        default=8,
+    )
+
+    edge_min_slider = create_slider(
+        id=f"{id_prefix}-edge-min-3d",
+        label="Edge Width (Min)",
+        min_val=0.1,
+        max_val=10,
+        step=0.1,
+        default=0.5,
+    )
+
+    edge_max_slider = create_slider(
+        id=f"{id_prefix}-edge-max-3d",
+        label="Edge Width (Max)",
+        min_val=0.1,
+        max_val=10,
+        step=0.1,
+        default=5.0,
+    )
+
+    arc_points_slider = create_slider(
+        id=f"{id_prefix}-arc-points-3d",
+        label="Arc Curve Resolution (# Points)",
+        min_val=5,
+        max_val=200,
+        step=5,
+        default=50,
+    )
+
+    hemisphere_row = dbc.Row(
+        [
+            dbc.Col(
+                dbc.Checklist(
+                    id=f"{id_prefix}-show-left-3d",
+                    options=[{"label": "Show Left Hemisphere", "value": True}],
+                    value=[True],
+                    switch=True,
+                ),
+                width=6,
+            ),
+            dbc.Col(
+                dbc.Checklist(
+                    id=f"{id_prefix}-show-right-3d",
+                    options=[{"label": "Show Right Hemisphere", "value": True}],
+                    value=[True],
+                    switch=True,
+                ),
+                width=6,
+            ),
+        ]
+    )
+
+    return html.Div(
+        id=f"{id_prefix}-3d-options",
+        children=[
+            html.Hr(),
+            html.H5("3D Visualization Options"),
+            node_size_slider,
+            edge_min_slider,
+            edge_max_slider,
+            arc_points_slider,
+            html.Br(),
+            hemisphere_row,
+        ],
+        style={"display": "none"},
+    )
+
 
 def create_viz_controls(id_prefix: str, n_mat: int) -> html.Div:
-    
-    viz_type_options = [
-        {"label": "2D", "value": "2D"},
-        {"label": "3D", "value": "3D"},
-        {"label": "Heatmap", "value": "Heatmap"},
-    ]
-    
+
     viz_type_dropdown = create_dropdown(
-        id='viz-type-dropdown',
-        options=viz_type_options,
+        id="viz-type-dropdown",
         label="Visualization Type",
         default="2D",
-    )
-
-    color_map_options = [
-        {"label": "Viridis", "value": "Viridis"},
-        {"label": "Cividis", "value": "Cividis"},
-        {"label": "Plasma", "value": "Plasma"},
-        {"label": "Inferno", "value": "Inferno"},
-        {"label": "Magma", "value": "Magma"},
-        {"label": "Turbo", "value": "Turbo"},
-        {"label": "Hot", "value": "Hot"},
-        {"label": "Cool", "value": "Cool"},
-        {"label": "Rainbow", "value": "Rainbow"},
-        {"label": "Cubehelix", "value": "Cubehelix"},
-        {"label": "Greys", "value": "Greys"},
-        {"label": "YlGnBu", "value": "YlGnBu"},
-        {"label": "RdBu", "value": "RdBu"},
-        {"label": "Picnic", "value": "Picnic"},
-        {"label": "Portland", "value": "Portland"},
-        {"label": "Jet", "value": "Jet"},
-        {"label": "Hotpink", "value": "Hotpink"},
-        {"label": "Electric", "value": "Electric"},
-        {"label": "Blackbody", "value": "Blackbody"},
-        {"label": "Earth", "value": "Earth"},
-        {"label": "Balance", "value": "Balance"},
-        {"label": "RdYlGn", "value": "RdYlGn"},
-        {"label": "Spectral", "value": "Spectral"},
-    ]
-
-    color_map_dropdown = create_dropdown(
-        id=f'color-type-dropdown',
-        options=color_map_options,
-        label="Color Type",
-        default="Viridis",
-    )
-
-    
-    min_max_input_group = html.Div(
-        [
-            dbc.Label("Color Range (0-1)"),
-            html.Div(
-                dcc.RangeSlider(
-                    id="conn-range",
-                    min=0.0,
-                    max=1.0,
-                    step=0.01,
-                    value=[0.0, 1.0],
-                    allowCross=False,
-                    marks={0: "0.0", 0.5: "0.5", 1.0: "1.0"},
-                    tooltip={"placement": "bottom", "always_visible": False},
-                ),
-            ),
+        options=[
+            {"label": "2D", "value": "2D"},
+            {"label": "3D", "value": "3D"},
+            {"label": "Heatmap", "value": "Heatmap"},
         ],
     )
+
+    color_map_dropdown = create_dropdown(
+        id="color-type-dropdown",
+        label="Color Map",
+        default="Viridis",
+        options=viz_type_dropdown
+    )
+
+    color_range = html.Div(
+        [
+            dbc.Label("Color Range (0–1)"),
+            dcc.RangeSlider(
+                id="conn-range",
+                min=0,
+                max=1,
+                step=0.01,
+                value=[0.0, 1.0],
+                allowCross=False,
+                marks={0: "0.0", 0.5: "0.5", 1.0: "1.0"},
+            ),
+        ]
+    )
+
+    # 2D/3D option blocks
+    options_2d = create_2d_options(id_prefix)
+    options_3d = create_3d_options(id_prefix)
 
     return dbc.Container(
         children=[
             viz_type_dropdown,
             color_map_dropdown,
-            min_max_input_group],
+            color_range,
+            options_2d,
+            options_3d,
+        ],
         fluid=True,
-        className=container_class,
+        className="p-2",
     )
+
 
 
 def create_data_component(id_prefix: str, n_mat: int) -> html.Div:

@@ -27,6 +27,11 @@ class UpdateType(Enum):
     COLOR=auto()
     ALL=auto()
 
+class VizType(Enum):
+    FIG2D=auto()
+    FIG3D=auto()
+    FIGHEATMAP=auto()
+
 
 def _rgba_from_color(col: str, strength: float) -> str:
     """Return an 'rgba(r,g,b,a)' string for a given hex or named color and strength in [0,1].
@@ -147,27 +152,66 @@ class ConnectivityVisualizer:
         colorscale: str = "Viridis",
         color_min: float = 0.0,
         color_max: float = 1.0,
-        node_size: float = 10.0,
+
+        # 2D settings
+        node_size_2d: float = 10.0,
+        edge_size_min_2d: float = 0.4,
+        edge_size_max_2d: float = 4.0,
+
+        # 3D settings
+        node_size_3d: float = 10.0,
+        edge_size_min_3d: float = 0.4,
+        edge_size_max_3d: float = 4.0,
+        num_arc_points_3d: int = 4,
+        show_right_hemi_3d: bool = True,
+        show_left_hemi_3d: bool = True,
+
         show_labels: bool = True,
         default_pos_color: str = "red",
         default_neg_color: str = "blue",
         node_fill: str = "lightgreen",
         node_edge: str = "black",
-        viz_type: str = "2D",
+        viz_type: VizType = VizType.FIG2D,
     ) -> None:
-        # ---- config fields ----
-        self.conn_idx: int = conn_idx
-        self.colorscale: str = colorscale
-        self.color_min: float = color_min
-        self.color_max: float = color_max
-        self.node_size: float = node_size
-        self.show_labels: bool = show_labels
-        self.default_pos_color: str = default_pos_color
-        self.default_neg_color: str = default_neg_color
-        self.node_fill: str = node_fill
-        self.node_edge: str = node_edge
-        self.viz_type: str = viz_type
 
+        # -----------------------
+        # Core settings
+        # -----------------------
+        self.conn_idx = conn_idx
+        self.colorscale = colorscale
+        self.color_min = color_min
+        self.color_max = color_max
+        self.viz_type = viz_type
+        self.show_labels = show_labels
+
+        # -----------------------
+        # 2D settings
+        # -----------------------
+        self.node_size_2d = node_size_2d
+        self.edge_size_min_2d = edge_size_min_2d
+        self.edge_size_max_2d = edge_size_max_2d
+
+        # -----------------------
+        # 3D settings
+        # -----------------------
+        self.node_size_3d = node_size_3d
+        self.edge_size_min_3d = edge_size_min_3d
+        self.edge_size_max_3d = edge_size_max_3d
+        self.num_arc_points_3d = num_arc_points_3d
+        self.show_right_hemi_3d = show_right_hemi_3d
+        self.show_left_hemi_3d = show_left_hemi_3d
+
+        # -----------------------
+        # Node rendering settings
+        # -----------------------
+        self.node_fill = node_fill
+        self.node_edge = node_edge
+
+        # -----------------------
+        # Edge rendering settings
+        # -----------------------
+        self.default_pos_color = default_pos_color
+        self.default_neg_color = default_neg_color
         
         # coordinates + labels (filled by update_xyz)
         self.xyz: np.ndarray = np.empty((0, 3), dtype=float)     # (n, 3)
@@ -177,8 +221,11 @@ class ConnectivityVisualizer:
         self.update_xyz(brain_data.chanlocs)
 
         # caches
-        self.mask_cache = None 
+        self.mask_cache: np.ndarray = np.empty((brain_data.n_nodes, brain_data.n_nodes), dtype=bool) 
         self._edge2d_trace_idx = {}
+        self._edge3d_trace_idx = {}
+        self._colorbar_trace_idx_2d = -999
+        self._colorbar_trace_idx_3d = -999
         self._base_2d_traces: Optional[List[go.Scattergl]] = None
         self.fig_2d_cache = None
         self.fig_3d_cache = None
@@ -187,47 +234,56 @@ class ConnectivityVisualizer:
         print("Built")
     # --------- Boilerplate ----------
 
-    def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}("
-            f"conn_idx={self.conn_idx}, "
-            f"colorscale={self.colorscale!r}, "
-            f"color_min={self.color_min}, "
-            f"color_max={self.color_max}, "
-            f"node_size={self.node_size}, "
-            f"show_labels={self.show_labels}, "
-            f"viz_type={self.viz_type!r}"
-            f")"
-        )
+    # def __repr__(self) -> str:
+    #     return (
+    #         f"{self.__class__.__name__}("
+    #         f"conn_idx={self.conn_idx}, "
+    #         f"colorscale={self.colorscale!r}, "
+    #         f"color_min={self.color_min}, "
+    #         f"color_max={self.color_max}, "
+    #         f"node_size={self.node_size}, "
+    #         f"show_labels={self.show_labels}, "
+    #         f"viz_type={self.viz_type!r}"
+    #         f")"
+    #     )
     
-    def __eq__(self, other) -> bool:
-        """Two visualizers are considered equal if all configuration fields match."""
-        if not isinstance(other, ConnectivityVisualizer):
-            return False
+    # def __eq__(self, other) -> bool:
+    #     """Two visualizers are considered equal if all configuration fields match."""
+    #     if not isinstance(other, ConnectivityVisualizer):
+    #         return False
 
-        return (
-            self.conn_idx == other.conn_idx
-            and self.colorscale == other.colorscale
-            and self.color_min == other.color_min
-            and self.color_max == other.color_max
-            and self.node_size == other.node_size
-            and self.show_labels == other.show_labels
-            and self.default_pos_color == other.default_pos_color
-            and self.default_neg_color == other.default_neg_color
-            and self.node_fill == other.node_fill
-            and self.node_edge == other.node_edge
-            and self.viz_type == other.viz_type
-        )
+    #     return (
+    #         self.conn_idx == other.conn_idx
+    #         and self.colorscale == other.colorscale
+    #         and self.color_min == other.color_min
+    #         and self.color_max == other.color_max
+    #         and self.node_size == other.node_size
+    #         and self.show_labels == other.show_labels
+    #         and self.default_pos_color == other.default_pos_color
+    #         and self.default_neg_color == other.default_neg_color
+    #         and self.node_fill == other.node_fill
+    #         and self.node_edge == other.node_edge
+    #         and self.viz_type == other.viz_type
+    #     )
     
     # ---------- Shared helpers ----------
     @staticmethod
-    def _max_conn_scale(C: np.ndarray) -> float:
-        D = C.copy()
-        np.fill_diagonal(D, 0.0)
-        if np.any(np.isfinite(D)):
-            m = np.nanmax(np.abs(D))
-            return float(m) if m > 0 else 1.0
-        return 1.0
+    def _get_edge_width(edge:float, scale: float, min_width:float, max_width:float)->float:
+        return min_width + (abs(edge) / max(scale, 1e-12)) * (max_width - min_width)
+
+    def _get_edge_color(self, edge:float, data_min:float, data_max:float):
+        t_global = (edge - data_min) / max((data_max - data_min), 1e-12)
+        try:
+            adj = (t_global - self.color_min) / max((self.color_max - self.color_min), 1e-12)
+        except Exception:
+            adj = t_global
+        adj = float(np.clip(adj, 0.0, 1.0))
+
+        try:
+            return _color_from_scale(self.colorscale, adj)
+        except Exception:
+            base_color = self.default_pos_color if edge >= 0 else self.default_neg_color
+            return _rgba_from_color(base_color, max(0.12, 0.25 + 0.75 * adj))
 
     @staticmethod
     def _quad_bezier(p0: np.ndarray, p1: np.ndarray, curvature: float = 0.25, m: int = 40) -> np.ndarray:
@@ -287,17 +343,98 @@ class ConnectivityVisualizer:
         cs, ss = np.cos(thetas), np.sin(thetas)
         pts = center[None, :] + R * cs[:, None] * u[None, :] + R * ss[:, None] * v[None, :]
         return pts[:, 0], pts[:, 1], pts[:, 2]
+    
+    @staticmethod
+    def _add_colorbar_trace(fig, colorscale, zmin, zmax, viz_type: VizType) -> int:
+        """
+        Add an invisible dummy trace to show a colorbar, depending on VizType.
+        Returns the index of the added trace (or None on failure).
+        """
+
+        # Select trace class + coordinates based on visualization type
+        if viz_type == VizType.FIG2D:
+            trace_cls = go.Scattergl
+            coords = {"x": [None], "y": [None]}
+
+        elif viz_type == VizType.FIG3D:
+            trace_cls = go.Scatter3d
+            coords = {"x": [None], "y": [None], "z": [None]}
+        else:
+            raise ValueError(f"Unsupported viz_type: {viz_type}")
+
+        trace = trace_cls(
+            **coords,
+            mode="markers",
+            marker=dict(
+                colorscale=colorscale,
+                cmin=zmin,
+                cmax=zmax,
+                color=[zmin, zmax],
+                showscale=True,
+                colorbar=dict(
+                    title="Conn",
+                    len=0.45,
+                    thickness=12,
+                ),
+            ),
+            showlegend=False,
+            hoverinfo="none",
+            name=f"colorbar-{viz_type.name.lower()}",
+        )
+
+        try:
+            fig.add_trace(trace)
+            return len(fig.data) - 1  # return trace index
+        except Exception:
+            return None
+    
+    @staticmethod
+    def _update_colorbar(fig, colorbar_idx, colorscale, zmin, zmax):
+        tr = fig.data[colorbar_idx]
+        tr.marker.colorscale = colorscale
+        tr.marker.cmin = zmin
+        tr.marker.cmax = zmax
+        tr.marker.color = [zmin, zmax]
+
+    @staticmethod
+    def _update_edge_trace(trace, edge_weight, color, width, opacity, label1, label2):     
+        trace.line.color = color
+        trace.line.width = width
+        trace.opacity = opacity
+        trace.hoverinfo = "text"
+        trace.text = f"{label1} → {label2}<br>Weight: {edge_weight:.3f}"
+    
     # ---------- Utils ----------
     def update(self, brain_data, threshold, update_type, viz_updates):
         self.conn_idx = viz_updates["conn_idx"]
         self.colorscale = viz_updates["colorscale"]
         self.color_max = viz_updates["color_max"]
         self.color_min = viz_updates["color_min"]
+
         
         if self.viz_type != viz_updates["viz_type"]:
             self.viz_type = viz_updates["viz_type"]
             self.build_figure(brain_data, threshold)
-        
+
+        # -----------------------
+        # 2D settings
+        # -----------------------
+        if self.viz_type == VizType.FIG2D:
+            self.node_size_2d = viz_updates["node_size_2d"]
+            self.edge_size_min_2d = viz_updates["edge_min_2d"]
+            self.edge_size_max_2d = viz_updates["edge_max_2d"]
+
+        # -----------------------
+        # 3D settings
+        # -----------------------
+        if self.viz_type == VizType.FIG3D:
+            self.node_size_3d = viz_updates["node_size_3d"]
+            self.edge_size_min_3d = viz_updates["edge_min_3d"]
+            self.edge_size_max_3d = viz_updates["edge_max_3d"]
+            self.num_arc_points_3d = viz_updates["arc_points_3d"]
+            self.show_left_hemi_3d  = viz_updates["show_hemi_left_3d"]
+            self.show_right_hemi_3d = viz_updates["show_hemi_right_3d"]
+            
         self.update_figure(brain_data=brain_data, threshold=threshold, update_type=update_type)
         # inefficient?? building then updating?
 
@@ -388,11 +525,11 @@ class ConnectivityVisualizer:
 
     def get_figure(self) -> go.Figure:
         """Get the current figure based on viz_type."""
-        if self.viz_type == "2D":
+        if self.viz_type == VizType.FIG2D:
             return self.fig_2d_cache
-        elif self.viz_type == "3D":
+        elif self.viz_type == VizType.FIG3D:
             return self.fig_3d_cache
-        elif self.viz_type == "Heatmap":
+        elif self.viz_type == VizType.FIGHEATMAP:
             return self.fig_heatmap_cache
         else:
             return go.Figure()
@@ -402,31 +539,25 @@ class ConnectivityVisualizer:
         self.fig_2d_cache = None
         self.fig_3d_cache = None
         self.fig_heatmap_cache = None
-        if self.viz_type == "2D":
+        if self.viz_type == VizType.FIG2D:
             fig = self.build_figure_2d(
                 brain_data=brain_data,
                 threshold=threshold,
-                use_arcs=True,
                 curvature=0.25,
-                lw_min=0.5,
-                lw_max=4.0,
-                # title=None,
             )
             self.fig_2d_cache = fig
             return fig
-        elif self.viz_type == "3D":
+        elif self.viz_type == VizType.FIG3D:
             fig = self.build_figure_3d(
                 brain_data=brain_data,
                 threshold=threshold,
-                # title=None,
             )
             self.fig_3d_cache = fig
             return fig
-        elif self.viz_type == "Heatmap":
+        elif self.viz_type == VizType.FIGHEATMAP:
             fig = self.build_figure_heatmap(
                 brain_data=brain_data,
                 threshold=threshold,
-                # title=None,
             )
             self.fig_heatmap_cache = fig
             return fig
@@ -435,19 +566,19 @@ class ConnectivityVisualizer:
         
     def update_figure(self, brain_data: BrainData, threshold: Threshold, update_type: UpdateType) -> go.Figure:
         """Get the current figure based on viz_type."""
-        if self.viz_type == "2D":
+        if self.viz_type == VizType.FIG2D:
             return self.update_figure_2d(
                 brain_data=brain_data,
                 threshold=threshold,
                 update_type=update_type
             )
-        elif self.viz_type == "3D":
+        elif self.viz_type == VizType.FIG3D:
             return self.update_figure_3d(
                 brain_data=brain_data,
                 threshold=threshold,
                 update_type=update_type
             )
-        elif self.viz_type == "Heatmap":
+        elif self.viz_type == VizType.FIGHEATMAP:
             return self.update_figure_heatmap(
                 brain_data=brain_data,
                 threshold=threshold,
@@ -458,86 +589,43 @@ class ConnectivityVisualizer:
 
     # ---------- Visualization methods ----------
 
-    # ------------------------------------------------------------------
-    # CACHE helpers
-    # ------------------------------------------------------------------
+    def _get_scale_and_range(self, C: np.ndarray):
+        """
+        Compute:
+        - scale       : max abs connection (excluding diagonal)
+        - data_min    : -1 or 0 depending on sign of C
+        - data_max    : 1 or 0 depending on sign of C
+        - zmin, zmax  : clipped color scale range
+        """
 
-    def _build_base_2d_traces(self) -> List[go.Scattergl]:
-        """Head outline, nose, and node markers (no edges)."""
-        theta = np.linspace(0, 2 * np.pi, 256)
-        x, y = self.xy_topo[:, 0], self.xy_topo[:, 1]
+        # ---- SCALE ----
+        D = C.copy()
+        np.fill_diagonal(D, 0.0)
 
-        head = go.Scattergl(
-            x=np.cos(theta),
-            y=np.sin(theta),
-            mode="lines",
-            line=dict(color="black", width=2),
-            hoverinfo="skip",
-            name="Head",
-        )
-
-        nose = go.Scattergl(
-            x=[0.10, 0.00, -0.10],
-            y=[1.00, 1.10, 1.00],
-            mode="lines",
-            line=dict(color="black", width=2),
-            name="Nose",
-            hoverinfo="skip",
-            showlegend=False,
-        )
-
-        nodes = go.Scattergl(
-            x=x,
-            y=y,
-            mode="markers+text" if self.show_labels else "markers",
-            text=self.labels if self.show_labels else None,
-            textposition="middle center",
-            marker=dict(
-                size=self.node_size,
-                color=self.node_fill,
-                line=dict(color=self.node_edge, width=2),
-            ),
-            hovertext=self.labels,
-            hoverinfo="text",
-            name="Electrodes",
-        )
-
-        return [head, nose, nodes]
-    
-    def _get_edge_path(self, i: int, j: int, use_arcs: bool, curvature: float) -> np.ndarray:
-        """Return cached polyline for edge (i,j)."""
-        # key = (i, j, use_arcs, float(curvature))
-        # if key in self._edge_paths_cache:
-        #     return self._edge_paths_cache[key]
-
-        p0 = self.xy_topo[i]
-        p1 = self.xy_topo[j]
-        if use_arcs:
-            P = self._quad_bezier(p0, p1, curvature, m=60)
+        if np.any(np.isfinite(D)):
+            scale = float(np.nanmax(np.abs(D)))
+            if scale <= 0:
+                scale = 1.0
         else:
-            P = np.vstack([p0, p1])
+            scale = 1.0
 
-        # self._edge_paths_cache[key] = P
-        return P
+        # ---- DATA RANGE (SIGN-BASED) ----
+        data_min = 0.0 if np.nanmin(C) >= 0 else -1.0
+        data_max = 0.0 if np.nanmax(C) < 0 else  1.0
 
-    def _get_scale_and_range(self, C: np.ndarray) -> Tuple[float, Tuple[float, float]]:
-        """
-        Cache global scale and sign range for a given connectivity matrix C.
-        """
-        # key = id(C)
-        # if key in self._scale_range_cache:
-        #     return self._scale_range_cache[key]
+        # ---- COLOR RANGE ----
+        cmin = float(np.clip(self.color_min, 0.0, 1.0))
+        cmax = float(np.clip(self.color_max, 0.0, 1.0))
 
-        scale = self._max_conn_scale(C)
-        data_min = 0 if np.min(C) >= 0 else -1.0
-        data_max = 0 if np.max(C) < 0 else 1.0
-        zmin = data_min + float(np.clip(self.color_min, 0.0, 1.0)) * (data_max - data_min)
-        zmax = data_min + float(np.clip(self.color_max, 0.0, 1.0)) * (data_max - data_min)
+        zmin = data_min + cmin * (data_max - data_min)
+        zmax = data_min + cmax * (data_max - data_min)
+
         if zmin == zmax:
-            zmin, zmax = zmin - 1e-6, zmax + 1e-6
+            zmin -= 1e-6
+            zmax += 1e-6
 
-        # self._scale_range_cache[key] = (scale, (data_min, data_max))
         return scale, data_min, data_max, zmin, zmax
+
 
     def _get_candidate_edges(self, old_mask, new_mask, update_type, brain_data: BrainData):
         n = brain_data.n_nodes
@@ -579,69 +667,101 @@ class ConnectivityVisualizer:
         return []
 
 
-    def get_ij_iter(self, n_nodes: int, is_directed: bool) -> List[Tuple[int, int]]:
+    def get_ij_iter(self, n_nodes: int, is_directed: bool):
         if is_directed:
-            return product(range(n_nodes), repeat=2)
+            # All ordered pairs except i == j
+            return ((i, j) for i, j in product(range(n_nodes), repeat=2) if i != j)
         else:
+            # Only undirected upper-triangle pairs, i < j automatically guarantees i != j
             return ((i, j) for i in range(n_nodes)
-                for j in range(i + 1, n_nodes))
+                    for j in range(i + 1, n_nodes))
 
     # ------------------------------------------------------------------
     # Edges builder
     # ------------------------------------------------------------------
+    def _build_base_traces_2d(self) -> List[go.Scattergl]:
+            """Head outline, nose, and node markers (no edges)."""
+            theta = np.linspace(0, 2 * np.pi, 256)
+            x, y = self.xy_topo[:, 0], self.xy_topo[:, 1]
 
-    def _build_edge_traces(
+            head = go.Scattergl(
+                x=np.cos(theta),
+                y=np.sin(theta),
+                mode="lines",
+                line=dict(color="black", width=2),
+                hoverinfo="skip",
+                name="Head",
+            )
+
+            nose = go.Scattergl(
+                x=[0.10, 0.00, -0.10],
+                y=[1.00, 1.10, 1.00],
+                mode="lines",
+                line=dict(color="black", width=2),
+                name="Nose",
+                hoverinfo="skip",
+                showlegend=False,
+            )
+
+            nodes = go.Scattergl(
+                x=x,
+                y=y,
+                mode="markers+text" if self.show_labels else "markers",
+                text=self.labels if self.show_labels else None,
+                textposition="middle center",
+                marker=dict(
+                    size=self.node_size_2d,
+                    color=self.node_fill,
+                    line=dict(color=self.node_edge, width=2),
+                ),
+                hovertext=self.labels,
+                hoverinfo="text",
+                name="Electrodes",
+            )
+
+            return [head, nose, nodes]
+    
+    def _get_edge_path_2d(self, i: int, j: int, use_arcs: bool, curvature: float) -> np.ndarray:
+        p0 = self.xy_topo[i]
+        p1 = self.xy_topo[j]
+        if use_arcs:
+            P = self._quad_bezier(p0, p1, curvature, m=60)
+        else:
+            P = np.vstack([p0, p1])
+        return P
+
+    def _build_edge_traces_2d(
         self,
         brain_data: BrainData,
-        threshold: Threshold,
-        *,
         use_arcs: bool,
         curvature: float,
-        lw_min: float,
-        lw_max: float,
     ) -> List[go.Scattergl]:
-        """Create edge traces for the given connectivity matrix C."""
-        # Threshold and mask
-        # C, mask = threshold.apply_threshold(brain_data, self.conn_idx)
+        # get current matrix to get scale and range of data for new traces 
         C = self.get_mat_at_idx(brain_data)
         np.fill_diagonal(C, 0.0)
-
         scale, data_min, data_max, zmin, zmax = self._get_scale_and_range(C)
 
+        # set up these traces
         edge_traces: List[go.Scattergl] = []
         labels = self.labels
 
-        #  LOOP OVER EVERYTHING< NEED TO FIX LATER
+        #  LOOP OVER ALL POSSIBLE TRACES TO CREATE ALL EDGES
         ij_iter = self.get_ij_iter(brain_data.n_nodes, brain_data.directed) 
-
         for i, j in ij_iter:
-            if i == j:
-                continue
+            # get connection value
             w = C[i, j]
-            if not np.isfinite(w) or abs(w) < 1e-12:
-                continue
 
+            ### GET EDGE COLOR (MAYBE FUNCTION??)
             # Normalize weight to signed [data_min, data_max] then to [0,1]
-            t_global = (w - data_min) / max((data_max - data_min), 1e-12)
-            try:
-                adj = (t_global - self.color_min) / max((self.color_max - self.color_min), 1e-12)
-            except Exception:
-                adj = t_global
-            adj = float(np.clip(adj, 0.0, 1.0))
+            color = self._get_edge_color(edge=w, data_max=data_max, data_min=data_min)
 
-            # Color selection
-            try:
-                color = _color_from_scale(self.colorscale, adj)
-            except Exception:
-                base_color = self.default_pos_color if w >= 0 else self.default_neg_color
-                color = _rgba_from_color(base_color, max(0.12, 0.25 + 0.75 * adj))
+            ### GET EDGE WIDTH 
+            width = self._get_edge_width(edge=w, scale=scale, min_width=self.edge_size_min_2d, max_width=self.edge_size_max_3d)
 
-            # Line width scales with |w|
-            width = lw_min + (abs(w) / max(scale, 1e-12)) * (lw_max - lw_min)
+            ### GET EDGE PATH
+            P = self._get_edge_path_2d(i, j, use_arcs=use_arcs, curvature=curvature)
 
-            # Path for this edge
-            P = self._get_edge_path(i, j, use_arcs=use_arcs, curvature=curvature)
-
+            ### ADD TO EDGE TRACE LIST. CREATES EDGE
             edge_traces.append(
                 go.Scattergl(
                     x=P[:, 0],
@@ -656,7 +776,7 @@ class ConnectivityVisualizer:
                 )
             )
 
-            # Directed arrow
+            ### ADDS ARROWS IF DIRECTED
             if brain_data.directed and len(P) >= 2:
                 q0, q1 = P[-2], P[-1]
                 edge_traces.append(
@@ -665,54 +785,20 @@ class ConnectivityVisualizer:
                         y=[q0[1], q1[1]],
                         mode="lines",
                         line=dict(color=color, width=width / 2),
-                        opacity=0.0,  # invisible line, we add annotation in main fig
+                        opacity=0.0,  
                         showlegend=False,
                         hoverinfo="skip",
                     )
                 )
-                # We'll add arrows as annotations in figure_2d
 
         return edge_traces, (zmin, zmax)
     # ------------------------------------------------------------------
     # Main: figure_2d
     # ------------------------------------------------------------------
 
-    def build_figure_2d(
-        self,
-        *,
-        brain_data: BrainData,
-        threshold: Threshold,
-        use_arcs: bool = True,
-        curvature: float = 0.25,
-        lw_min: float = 0.5,
-        lw_max: float = 4.0,
-        title: Optional[str] = None,
-    ) -> go.Figure:
-        """
-        Interactive 2D EEG-style top view.
-        """
-        # Get connectivity matrix for current index/state
-        C = self.get_mat_at_idx(brain_data)
-        _, mask = threshold.apply_threshold(brain_data, self.conn_idx)
-        self.mask_cache = mask
-
-        # Base figure with static traces
-        fig = go.Figure()
-        for tr in self._build_base_2d_traces():
-            fig.add_trace(tr)
-        edge_traces, (zmin, zmax) = self._build_edge_traces(brain_data=brain_data, threshold=threshold,
-            use_arcs=brain_data.directed,
-            curvature=curvature,
-            lw_min=lw_min,
-            lw_max=lw_max,
-        )
-        for tr in edge_traces:
-            fig.add_trace(tr)
-
-        # ---- Rebuild a positional map: (i, j) -> trace index ----
-        labels = self.labels
+    def _create_cache_edges(self, labels, fig):
         label_to_idx = {lab: i for i, lab in enumerate(labels)}
-
+        trace_idx = {}
         for k, tr in enumerate(fig.data):
             name = getattr(tr, "name", None)
             if not name or "," not in name:
@@ -723,38 +809,42 @@ class ConnectivityVisualizer:
                 i = label_to_idx.get(a)
                 j = label_to_idx.get(b)
                 if i is not None and j is not None:
-                    self._edge2d_trace_idx[(i, j)] = k
+                    trace_idx[(i, j)] = k
             except Exception:
                 continue
 
+        return trace_idx
 
-        # Colorbar (invisible marker with colorscale)
-        try:
-            fig.add_trace(
-                go.Scattergl(
-                    x=[None],
-                    y=[None],
-                    mode="markers",
-                    marker=dict(
-                        colorscale=self.colorscale,
-                        cmin=zmin,
-                        cmax=zmax,
-                        color=[zmin, zmax],
-                        showscale=True,
-                        colorbar=dict(
-                            title="Conn",
-                            len=0.45,
-                            thickness=12,
-                        ),
-                    ),
-                    showlegend=False,
-                    hoverinfo="none",
-                    name="colorbar",
-                )
-            )
-        except Exception:
-            pass
+    def build_figure_2d(
+        self,
+        *,
+        brain_data: BrainData,
+        threshold: Threshold,
+        curvature: float = 0.25,
+        title: Optional[str] = None,
+    ) -> go.Figure:
+        ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
+        fig = go.Figure()
+        for tr in self._build_base_traces_2d():
+            fig.add_trace(tr)
 
+        ### CREATE EDGES
+        edge_traces, (zmin, zmax) = self._build_edge_traces_2d(brain_data=brain_data,
+            use_arcs=brain_data.directed,
+            curvature=curvature,
+        )
+        for tr in edge_traces:
+            fig.add_trace(tr)
+
+        ### CACHE EDGES (i, j) --> idx
+        labels = self.labels
+        self._edge2d_trace_idx = self._create_cache_edges(labels, fig)
+
+        ### CREATE COLOR BAR
+        colorbar_trace_idx = self._add_colorbar_trace(fig=fig, colorscale=self.colorscale,zmin=zmin,zmax=zmax, viz_type=VizType.FIG2D)
+        self._colorbar_trace_idx_2d = colorbar_trace_idx
+
+        ### ADD REST OF LAYOUT
         fig.update_layout(
             title=title,
             xaxis=dict(
@@ -771,265 +861,287 @@ class ConnectivityVisualizer:
 
         return fig
 
-    def update_figure_2d( self, *, brain_data: BrainData, threshold: Threshold, lw_min: float = 0.5, lw_max: float = 4.0, update_type:UpdateType) -> go.Figure:
+    def update_figure_2d( self, *, brain_data: BrainData, threshold: Threshold, update_type:UpdateType) -> go.Figure:
         fig = self.fig_2d_cache
+        if fig is None:
+            # safety: fall back to full build if cache is missing
+            return self.build_figure_2d(brain_data=brain_data, threshold=threshold)
+        
         C, mask = threshold.apply_threshold(brain_data, self.conn_idx)
         np.fill_diagonal(C, 0.0)
-        # print(mask)
-        # print("Update 2d")
-        # print("HEREL::")
         scale, data_min, data_max, zmin, zmax = self._get_scale_and_range(C)
         labels = self.labels
 
-        # Use batch_update to avoid repeated property rebuilds
         with fig.batch_update():
-            # print("HEREERER")
             old_mask = self.mask_cache
             self.mask_cache = mask.copy()
 
             traces_list = self._get_candidate_edges(old_mask, mask, update_type, brain_data)
 
-
-            
             for (i, j), idx in traces_list:
-                if i == j:
-                    continue
-
+                ### GET EDGE's CONN and MASK (BOOL)
                 w = C[i, j]
                 m = mask[i, j]
-                edge_name = f"{labels[i]},{labels[j]}"
-                # print(f"{labels[i]},{labels[j]}")
-                # print(i)
-                # print(j)
-                # print(m)
-                if idx is None:
-                    continue  # should not happen if build/setup is consistent
 
+                ### TRIED GETTING RID OF CHECK OF IDX
+                # if idx is None:
+                #     continue  # should not happen if build/setup is consistent
+
+                ### GET TRACE
                 trace = fig.data[idx]
                 
+                ### HIDE IF MASK == FALSE
                 if not m:
-                    # print("HERE")
                     trace.opacity = 0.0
-                    trace.hoverinfo = "skip"   # no hover at all
-                    trace.text = ""            # clear label
+                    trace.hoverinfo = "skip"
+                    trace.text = ""
                     continue
 
-                # same normalization as before
-                t_global = (w - data_min) / max((data_max - data_min), 1e-12)
-                try:
-                    adj = (t_global - self.color_min) / max(
-                        (self.color_max - self.color_min), 1e-12
-                    )
-                except Exception:
-                    adj = t_global
-                adj = float(np.clip(adj, 0.0, 1.0))
+                ### GET COLOR
+                color = self._get_edge_color(edge=w, data_max=data_max, data_min=data_min)
 
-                try:
-                    color = _color_from_scale(self.colorscale, adj)
-                except Exception:
-                    base_color = self.default_pos_color if w >= 0 else self.default_neg_color
-                    color = _rgba_from_color(base_color, max(0.12, 0.25 + 0.75 * adj))
+                ### GET WIDTH
+                width = self._get_edge_width(edge=w, scale=scale, min_width=self.edge_size_min_2d, max_width=self.edge_size_max_3d)
 
-                width = lw_min + (abs(w) / max(scale, 1e-12)) * (lw_max - lw_min)
+                ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE THIS AN UPDATEABLE VALUE
+                self._update_edge_trace(trace, w, color, width, 0,75, labels[i], labels[j])
 
-                # directly mutate the trace
-                trace.line.color = color
-                trace.line.width = width
-                trace.opacity = 0.75
-                trace.hoverinfo = "text"
-                trace.text = f"{labels[i]} → {labels[j]}<br>Weight: {w:.3f}"
-
-            # update colorbar in one go
-            for tr in fig.data:
-                if getattr(tr, "name", None) == "colorbar":
-                    tr.marker.colorscale = self.colorscale
-                    tr.marker.cmin = zmin
-                    tr.marker.cmax = zmax
-                    tr.marker.color = [zmin, zmax]
-                    break
-        self.fig_2d_cache = fig
-        print("FINISH UPDATING 2D")
+            # UPDATE COLOR BAR (MAKE THIS FUNCTION)
+            self._update_colorbar(fig, self._colorbar_trace_idx_2d, self.colorscale, zmin, zmax)
         return fig
 
-    def build_figure_3d(
-    self,
-    *,
-    brain_data: BrainData,
-    threshold: Threshold,
-    arc_radius: Optional[float] = None,   # None -> automatic radius; set a float to force
-    arc_samples: int = 4,  # Reduced from 24 for faster rendering
-    line_width: float = 3.0,
-    opacity: float = 0.6,
-    title: Optional[str] = None,
-) -> go.Figure:
+    def _normalize_weight(self, w: float, data_min: float, data_max: float) -> float:
         """
-        Interactive 3D connectivity. Builds geometry once and stores
-        per-edge trace indices so we can restyle later without rebuilding.
+        Normalize a weight w → [0,1] based on global min/max.
+        Handles signed matrices gracefully.
         """
-        # Get connectivity matrix (apply threshold only for initial view)
+        rng = max((data_max - data_min), 1e-12)
+        t = (w - data_min) / rng
+        return float(np.clip(t, 0.0, 1.0))
+    
+    def _get_edge_path_3d(
+        self,
+        i: int,
+        j: int,
+        C: np.ndarray,
+        data_min: float,
+        data_max: float,
+        arc_radius: Optional[float] = None,
+        m: int = 60
+    ) -> np.ndarray:
+        """
+        Builds a smooth 3D arc (with optional offset for bidirectional edges).
+        Returns P as an (m, 3) NumPy array.
+        """
+
+        p0 = self.xyz[i]
+        p1 = self.xyz[j]
+
+        # chord vector and length
+        chord = p1 - p0
+        L = np.linalg.norm(chord)
+
+        if L < 1e-12:
+            return np.vstack([p0, p1])   # fallback straight segment
+
+        d = chord / L
+
+        # curvature direction: choose a perpendicular vector
+        perp = np.cross(d, np.array([0.0, 0.0, 1.0]))
+        if np.linalg.norm(perp) < 1e-6:
+            perp = np.cross(d, np.array([0.0, 1.0, 0.0]))
+        perp = perp / (np.linalg.norm(perp) + 1e-12)
+
+        # detect bidirectional edges to offset arcs
+        reverse_exists = (np.isfinite(C[j, i]) and abs(C[j, i]) > 1e-12)
+        sign = 0
+        if reverse_exists:
+            sign = 1 if i < j else -1
+
+        # arc amplitude
+        if arc_radius is None:
+            arc_height = 0.15 * L      # automatic light curvature
+        else:
+            arc_height = float(arc_radius)
+
+        # parametric t in [0,1]
+        t = np.linspace(0.0, 1.0, m)
+
+        # central arc (quadratic "hump")
+        base = p0[None, :] + np.outer(t, chord)
+        hump = arc_height * np.sin(np.pi * t)
+
+        # primary curvature (adds elevation)
+        P = base + np.outer(hump, perp)
+
+        # if bidirectional, offset each arc sideways
+        if sign != 0:
+            env = np.sin(np.pi * t)
+            offset_amt = 0.06 * L * sign
+            P += np.outer(env * offset_amt, perp)
+
+        return P
+
+
+
+    def _build_edge_traces_3d(
+        self,
+        brain_data: BrainData,
+    ) -> Tuple[List[go.Scatter3d], Optional[go.Cone], Tuple[float, float]]:
+        """
+        Build all 3D edge traces for the brain network + a single aggregated arrowhead trace.
+        Returns (edge_traces, arrow_trace, (zmin, zmax)).
+        """
+
+        # ---- GET CURRENT MATRIX AND GLOBAL SCALING INFO ----
         C = self.get_mat_at_idx(brain_data)
-        _, mask = threshold.apply_threshold(brain_data, self.conn_idx)
-        self.mask_cache = mask
         np.fill_diagonal(C, 0.0)
+        scale, data_min, data_max, zmin, zmax = self._compute_scale_and_range(C)
 
-        fig = go.Figure()
+        labels = self.labels
+        n = brain_data.n_nodes
 
-        # mesh (optional)
+        # ---- OUTPUT CONTAINERS ----
+        edge_traces: List[go.Scatter3d] = []
+
+        # MAYBE TURN ARROWS INTO NUMPYS
+        arrow_pos = []   # list of (x, y, z)
+        arrow_vec = []   # list of (u, v, w)
+
+        arrow_vals = []
+        arrow_size_vals = []
+
+        # ---- LOOP OVER ALL EDGES ----
+        for i, j in self.get_ij_iter(n, brain_data.directed):
+            w = float(C[i, j])
+
+            # ---- COLOR + WIDTH ----
+            color = self._get_edge_color(edge=w, data_max=data_max, data_min=data_min)
+            width = self._get_edge_width(
+                edge=w,
+                scale=scale,
+                min_width=self.edge_size_min_3d,
+                max_width=self.edge_size_max_3d,
+            )
+
+            # ---- COMPUTE EDGE PATH (ARC + OFFSET FOR REVERSE FLOW) ----
+            P = self._get_edge_path_3d(i, j, C, data_min, data_max)
+
+            # ---- CREATE EDGE TRACE ---- NEED TO CHANGE OPACITY
+            edge_traces.append(
+                go.Scatter3d(
+                    x=P[:, 0],
+                    y=P[:, 1],
+                    z=P[:, 2],
+                    mode="lines",
+                    line=dict(width=width, color=color),
+                    opacity=0.75,
+                    showlegend=False,
+                    hoverinfo="text",
+                    text=f"{labels[i]} → {labels[j]}<br>Weight: {w:.3f}",
+                    name=f"{i},{j}",
+                )
+            )
+
+            # ---- COLLECT ARROWHEADS ONLY IF DIRECTED ----
+            if brain_data.directed and len(P) >= 2:
+                q0 = P[-2]
+                q1 = P[-1]
+
+                # Arrowhead position
+                pos = q1 - 0.05 * (q1 - q0)
+                # Direction vector
+                vec = q1 - q0
+                L = np.linalg.norm(vec)
+                if L < 1e-9:
+                    vec = (self.xyz[j] - self.xyz[i])
+                    L = np.linalg.norm(vec) + 1e-12
+                vec = vec / L
+
+                arrow_pos.append((pos[0], pos[1], pos[2]))
+                arrow_vec.append((vec[0], vec[1], vec[2]))
+
+
+                arrow_vals.append(w)
+
+                # For variable arrow size – scaled by normalized magnitude
+                adj = self._normalize_weight(w, data_min, data_max)
+                arrow_size_vals.append(max(0.6, 0.6 * adj))
+
+        # ------------------------------------------------------
+        #  BUILD THE SINGLE ARROWHEAD CONE TRACE (IF DIRECTED)
+        # ------------------------------------------------------
+
+        arrow_trace = None
+        if brain_data.directed and arrow_pos:
+            xs, ys, zs = zip(*arrow_pos)
+            us, vs, ws = zip(*arrow_vec)
+
+            arrow_trace = go.Cone(
+                x=xs, y=ys, z=zs,
+                u=us, v=vs, w=ws,
+                sizemode="absolute",
+                sizeref=max(0.5, float(np.nanmax(arrow_size_vals))),
+                anchor="tip",
+                colorscale=self.colorscale,
+                cmin=zmin, cmax=zmax,
+                color=arrow_vals,
+                showscale=False,
+                name="arrows",
+            )
+
+
+        return edge_traces, arrow_trace, (zmin, zmax)
+
+
+    def _build_base_traces_3d(self, brain_data):
         if brain_data.brain_mesh is not None and pv is not None and brain_data.brain_mesh.n_points > 0:
             pts = np.asarray(brain_data.brain_mesh.points)
             faces_np = np.asarray(brain_data.brain_mesh.faces)
             faces = faces_np.reshape(-1, 4)[:, 1:4].astype(int)
-            fig.add_trace(go.Mesh3d(
+            head = go.Mesh3d(
                 x=pts[:, 0], y=pts[:, 1], z=pts[:, 2],
                 i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
                 color="lightgray", opacity=0.25, flatshading=True,
                 lighting=dict(ambient=0.6, diffuse=0.6, specular=0.1),
                 name="Brain"
-            ))
+            )
 
-        # nodes
         x, y, z = self.xyz[:, 0], self.xyz[:, 1], self.xyz[:, 2]
-        fig.add_trace(go.Scatter3d(
+        nodes = go.Scatter3d(
             x=x, y=y, z=z,
             mode="markers+text" if self.show_labels else "markers",
             text=self.labels if self.show_labels else None,
             textposition="top center",
             textfont=dict(size=10, color="black"),
-            marker=dict(size=self.node_size),
+            marker=dict(size=self.node_size_3d),
             name="Electrodes"
-        ))
+        )
+        return [head, nodes]
 
-        # edges (support directed and conn range scaling)
-        scale = self._max_conn_scale(C)
-        if np.any(np.isfinite(C)):
-            data_min = float(np.nanmin(C))
-            data_max = float(np.nanmax(C))
-        else:
-            data_min, data_max = -1.0, 1.0
 
-        zmin = data_min + float(np.clip(self.color_min, 0.0, 1.0)) * (data_max - data_min)
-        zmax = data_min + float(np.clip(self.color_max, 0.0, 1.0)) * (data_max - data_min)
-        if zmin == zmax:
-            zmin, zmax = zmin - 1e-6, zmax + 1e-6
+    def build_figure_3d(
+        self,
+        *,
+        brain_data: BrainData,
+        title: Optional[str] = None,
+    ) -> go.Figure:
+        fig = go.Figure()
+         ### CREATE BRAIN_MESH and NODES
+        for tr in self._build_base_traces_3d(brain_data):
+            fig.add_trace(tr)
 
-        arrow_x, arrow_y, arrow_z, arrow_vals = [], [], [], []
-        arrow_dir_u, arrow_dir_v, arrow_dir_w = [], [], []
-        arrow_size = []
+        ### CREATE EDGES
+        edge_traces, arrow_trace, (zmin, zmax) = self._build_edge_traces_3d(brain_data=brain_data)
+        for tr in edge_traces:
+            fig.add_trace(tr)
 
-        # NEW: mapping from (i,j) -> trace index
-        self._edge3d_trace_idx = {}
+        ### CACHE EDGE IDX
+        labels = self.labels
+        self._edge23_trace_idx = self._create_cache_edges(labels, fig)
 
-        for i in range(self.n):
-            p0 = self.xyz[i]
-            targets = range(self.n) if brain_data.directed else range(i + 1, self.n)
-            for j in targets:
-                if i == j:
-                    continue
-                w = float(C[i, j])
-                if not np.isfinite(w) or abs(w) < 1e-12:
-                    continue
-
-                # map signed value to 0..1 over data_min..data_max then apply conn window
-                t_global = (w - data_min) / max((data_max - data_min), 1e-12)
-                adj = (t_global - self.color_min) / max((self.color_max - self.color_min), 1e-12)
-                adj = float(np.clip(adj, 0.0, 1.0))
-
-                p1 = self.xyz[j]
-                try:
-                    edge_col = _color_from_scale(self.colorscale, adj)
-                except Exception:
-                    edge_col = _rgba_from_color('red' if w >= 0 else 'blue', max(0.12, 0.25 + 0.75 * adj))
-
-                reverse_exists = (np.isfinite(C[j, i]) and abs(C[j, i]) > 1e-12)
-                sign = 0
-                if reverse_exists:
-                    sign = 1 if i < j else -1
-
-                chord = p1 - p0
-                L = np.linalg.norm(chord)
-                if L < 1e-12:
-                    perp = np.array([0.0, 0.0, 0.0])
-                else:
-                    d = chord / L
-                    perp = np.cross(d, np.array([0.0, 0.0, 1.0]))
-                    if np.linalg.norm(perp) < 1e-6:
-                        perp = np.cross(d, np.array([0.0, 1.0, 0.0]))
-                    perp = perp / (np.linalg.norm(perp) + 1e-12)
-
-                offset_amt = 0.06 * L * sign
-
-                X, Y, Z = self._arc_points_origin_plane(p0, p1, arc_radius, m=max(int(arc_samples), 2))
-                if sign != 0:
-                    tvals = np.linspace(0.0, 1.0, len(X))
-                    env = np.sin(np.pi * tvals)
-                    X = np.array(X) + perp[0] * offset_amt * env
-                    Y = np.array(Y) + perp[1] * offset_amt * env
-                    Z = np.array(Z) + perp[2] * offset_amt * env
-
-                edge_name = f"{i},{j}"  # index-based name for mapping
-
-                self._edge3d_trace_idx[(i, j)] = len(fig.data)
-                fig.add_trace(
-                    go.Scatter3d(
-                        x=list(X),
-                        y=list(Y),
-                        z=list(Z),
-                        mode="lines",
-                        line=dict(width=line_width * (0.6 + 0.8 * adj), color=edge_col),
-                        opacity=opacity,
-                        showlegend=False,
-                        hoverinfo="text",
-                        text=f"{self.labels[i]} → {self.labels[j]}<br>Weight: {w:.3f}",
-                        name=edge_name,
-                    )
-                )
-
-                if brain_data.directed and len(X) >= 2:
-                    q0 = np.array([X[-2], Y[-2], Z[-2]])
-                    q1 = np.array([X[-1], Y[-1], Z[-1]])
-                    pos = q1 - 0.05 * (q1 - q0)
-                    arrow_x.append(pos[0]); arrow_y.append(pos[1]); arrow_z.append(pos[2])
-                    vec = q1 - q0
-                    norm = np.linalg.norm(vec)
-                    if norm < 1e-9:
-                        vec = p1 - p0
-                        norm = np.linalg.norm(vec) + 1e-12
-                    vec = vec / (norm + 1e-12)
-                    arrow_dir_u.append(vec[0]); arrow_dir_v.append(vec[1]); arrow_dir_w.append(vec[2])
-                    arrow_vals.append(w)
-                    arrow_size.append(max(0.6, 0.6 * adj))
-
-        # Arrowheads aggregated in ONE trace
-        self._arrow3d_trace_idx = None
-        if brain_data.directed and arrow_x:
-            try:
-                self._arrow3d_trace_idx = len(fig.data)
-                fig.add_trace(go.Cone(
-                    x=arrow_x, y=arrow_y, z=arrow_z,
-                    u=arrow_dir_u, v=arrow_dir_v, w=arrow_dir_w,
-                    sizemode='absolute', sizeref=max(0.5, float(np.nanmax(arrow_size))),
-                    anchor='tip',
-                    colorscale=self.colorscale, cmin=zmin, cmax=zmax,
-                    color=arrow_vals,
-                    showscale=False,
-                    name="arrows",
-                ))
-            except Exception:
-                pass
-
-        # colorbar for 3D: invisible marker trace to display colorscale legend
-        self._colorbar3d_trace_idx = None
-        try:
-            self._colorbar3d_trace_idx = len(fig.data)
-            fig.add_trace(go.Scatter3d(
-                x=[None], y=[None], z=[None], mode="markers",
-                marker=dict(colorscale=self.colorscale, cmin=zmin, cmax=zmax, color=[zmin, zmax], showscale=True,
-                            colorbar=dict(title="Conn", len=0.45, thickness=12)),
-                showlegend=False, hoverinfo="none",
-                name="colorbar_3d",
-            ))
-        except Exception:
-            pass
+        ### COLOR BAR
+        self._add_colorbar_trace(fig=fig, colorscale=self.colorscale,zmin=zmin,zmax=zmax, viz_type=VizType.FIG3D)
 
         fig.update_layout(
             scene=dict(
@@ -1043,8 +1155,6 @@ class ConnectivityVisualizer:
             legend=dict(yanchor="top", y=0.98, xanchor="left", x=0.02),
             title=title or "3D Connectivity"
         )
-
-        self.fig_3d_cache = fig
         return fig
 
     def update_figure_3d(
@@ -1064,18 +1174,9 @@ class ConnectivityVisualizer:
 
         C, mask = threshold.apply_threshold(brain_data, self.conn_idx)
         np.fill_diagonal(C, 0.0)
+        scale, data_min, data_max, zmin, zmax = self._get_scale_and_range(C)
+        labels = self.labels
 
-        scale = self._max_conn_scale(C)
-        if np.any(np.isfinite(C)):
-            data_min = float(np.nanmin(C))
-            data_max = float(np.nanmax(C))
-        else:
-            data_min, data_max = -1.0, 1.0
-
-        zmin = data_min + float(np.clip(self.color_min, 0.0, 1.0)) * (data_max - data_min)
-        zmax = data_min + float(np.clip(self.color_max, 0.0, 1.0)) * (data_max - data_min)
-        if zmin == zmax:
-            zmin, zmax = zmin - 1e-6, zmax + 1e-6
 
         with fig.batch_update():
             # restyle per-edge traces
@@ -1083,51 +1184,33 @@ class ConnectivityVisualizer:
             self.mask_cache = mask.copy()
 
             traces_list = self._get_candidate_edges(old_mask, mask, update_type, brain_data)
-            for (i, j), idx in self._edge3d_trace_idx.items():
+
+            for (i, j), idx in traces_list:
                 w = float(C[i, j])
                 m = mask[i, j]
+                ### GET TRACE
                 trace = fig.data[idx]
 
-                if (not m) or (not np.isfinite(w)) or (abs(w) < 1e-12):
+                ### HIDE IF MASK == FALSE
+                if not m:
                     trace.opacity = 0.0
                     trace.hoverinfo = "skip"
                     trace.text = ""
                     continue
 
-                t_global = (w - data_min) / max((data_max - data_min), 1e-12)
-                try:
-                    adj = (t_global - self.color_min) / max(
-                        (self.color_max - self.color_min), 1e-12
-                    )
-                except Exception:
-                    adj = t_global
-                adj = float(np.clip(adj, 0.0, 1.0))
+                ### GET COLOR
+                color = self._get_edge_color(edge=w, data_max=data_max, data_min=data_min)
 
-                try:
-                    edge_col = _color_from_scale(self.colorscale, adj)
-                except Exception:
-                    base_color = self.default_pos_color if w >= 0 else self.default_neg_color
-                    edge_col = _rgba_from_color(base_color, max(0.12, 0.25 + 0.75 * adj))
+                ### GET WIDTH
+                width = self._get_edge_width(edge=w, scale=scale, min_width=self.edge_size_min_2d, max_width=self.edge_size_max_3d)
 
-                # scale line width
-                lw = line_width * (0.6 + 0.8 * (abs(w) / max(scale, 1e-12)))
+                ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE THIS AN UPDATEABLE VALUE
+                self._update_edge_trace(trace, w, color, width, 0,75, labels[i], labels[j])
 
-                trace.line.color = edge_col
-                trace.line.width = lw
-                trace.opacity = opacity
-                trace.hoverinfo = "text"
-                trace.text = f"{self.labels[i]} → {self.labels[j]}<br>Weight: {w:.3f}"
-
-            # update 3D colorbar if present
-            if getattr(self, "_colorbar3d_trace_idx", None) is not None:
-                cb_tr = fig.data[self._colorbar3d_trace_idx]
-                cb_tr.marker.colorscale = self.colorscale
-                cb_tr.marker.cmin = zmin
-                cb_tr.marker.cmax = zmax
-                cb_tr.marker.color = [zmin, zmax]
-
-        self.fig_3d_cache = fig
+            # UPDATE COLOR BAR (MAKE THIS FUNCTION)
+            self._update_colorbar(fig, self._colorbar_trace_idx_2d, self.colorscale, zmin, zmax)
         return fig
+
 
     def build_figure_heatmap(
         self,
@@ -1135,33 +1218,15 @@ class ConnectivityVisualizer:
         threshold: Threshold,
         brain_data: BrainData,
     ) -> go.Figure:
-        # print("Building heatmap figure HERE")
-        bg_color = "rgba(230,230,230,0.3)"
-
         C, mask = threshold.apply_threshold(brain_data, self.conn_idx)
+        self.mask_cache = mask
 
         fig = go.Figure()
 
         # Color range: compute full-data min/max then map color_min/color_max (0..1) into that range
         scale, data_min, data_max, zmin, zmax = self._get_scale_and_range(C)
 
-        # --- Background layer: faint grid of boxes ---
-        bg = np.full_like(C, np.nan)
-        bg[np.isnan(C)] = 0  # only fill where data is missing
-
-        fig.add_trace(go.Heatmap(
-            z=bg,
-            x=self.labels,
-            y=self.labels,
-            colorscale=[[0, bg_color], [1, bg_color]],  # constant faint gray
-            showscale=False,
-            xgap=0.5,
-            ygap=0.5,
-            hoverinfo="skip",
-            name="background"
-        ))
-
-        # --- Main heatmap ---
+        ### CREATE HEATMAP, WE DO NOT NEED TO CREATE IT'S OWN COLORBAR
         fig.add_trace(go.Heatmap(
             z=C,
             x=self.labels,
@@ -1205,8 +1270,6 @@ class ConnectivityVisualizer:
         threshold: Threshold,
         update_type:UpdateType
     ) -> go.Figure:
-        # print("Updating heatmap figure HERE")
-        bg_color = "rgba(230,230,230,0.3)"
 
         C, mask = threshold.apply_threshold(brain_data, self.conn_idx)
 
