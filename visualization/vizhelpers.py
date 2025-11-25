@@ -411,3 +411,34 @@ def compute_locs_2d_topo(sx: np.ndarray, sy: np.ndarray) -> np.ndarray:
 
     return np.column_stack([xs, ys])
 
+def _get_candidate_edges(edge_trace_idx, old_thresh_mask, new_thresh_mask, update_type, directed, n_nodes):
+
+        ij_iter = _get_ij_iter(n_nodes=n_nodes, directed=directed)
+        changed_edges = []
+        # ---- ALL ----
+        if update_type is UpdateType.ALL:
+            changed_edges = [
+                ((i, j), edge_trace_idx[(i, j)])
+                for (i, j) in ij_iter
+                if (i, j) in edge_trace_idx
+            ]
+
+        # ---- COLOR ----, only get visible edges
+        if update_type is UpdateType.COLOR:
+            changed_edges = [
+                ((i, j), edge_trace_idx[(i, j)])
+                for (i, j) in ij_iter
+                if new_thresh_mask[i, j] and (i, j) in edge_trace_idx
+            ]
+        # ---- THRESHOLD ----, get edges which differ in their visibility between the old_thresh_mask and new_thresh_mask
+        if update_type is UpdateType.THRESHOLD:
+            diff = (old_thresh_mask != new_thresh_mask)
+            changed_edges = [
+                ((i, j), edge_trace_idx[(i, j)])
+                for (i, j) in ij_iter
+                if diff[i, j] and (i, j) in edge_trace_idx
+            ]
+            
+
+        print(f"Number edges: {len(changed_edges)}")
+        return changed_edges
