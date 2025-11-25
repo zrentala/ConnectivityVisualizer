@@ -25,34 +25,34 @@ class ConnectivityView(ABC):
         # self.build_figure(brain_data=brain_data, threshold=threshold)
     """Interface for all connectivity visualizers (2D, 3D, heatmap, etc.)."""
     @abstractmethod
-    def build_figure(self, brain_data: BrainData) -> go.Figure:
+    def build_figure(
+        self,
+        C: np.ndarray,
+        labels, 
+        directed: bool,
+        colorscale: str,
+    ) -> go.Figure:
         pass
     @abstractmethod
     def update_figure(
         self,
-        brain_data: BrainData,
-        threshold: Threshold,
-        update_type: UpdateType,
+        C: np.ndarray,
+        labels, 
+        directed: bool,
+        colorscale: str,
+        update_type:UpdateType,
         new_thresh_mask: Optional[np.ndarray],
-        old_thresh_mask: Optional[np.ndarray]
+        old_thresh_mask: Optional[np.ndarray],
     ) -> go.Figure:
         pass
 
     @abstractmethod
-    def get_figure(self) -> go.Figure:
+    def update_attributes(self):
         pass
 
 # class NodeView()
 
 class ConnectivityViewHeatmap(ConnectivityView):
-    def __init__(
-        self,
-        brain_data: BrainData,
-        threshold: Threshold,
-    ) -> None:
-        # caches
-        self.mask_cache: np.ndarray = np.empty((brain_data.n_nodes, brain_data.n_nodes), dtype=bool) 
-
 
     def build_figure(
         self,
@@ -60,7 +60,6 @@ class ConnectivityViewHeatmap(ConnectivityView):
         C:np.ndarray, 
         colorscale: str, 
         labels, 
-        directed: bool,
     ) -> go.Figure:
         fig = go.Figure()
 
@@ -102,6 +101,7 @@ class ConnectivityViewHeatmap(ConnectivityView):
             plot_bgcolor="white",
         )
 
+        self.fig = fig
         return fig
 
     def update_figure( self,
@@ -113,10 +113,10 @@ class ConnectivityViewHeatmap(ConnectivityView):
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
     ) -> go.Figure:
+        fig = self.fig
+        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C)
 
-        scale, data_min, data_max, zmin, zmax = self._get_scale_and_range(C)
-
-        self.fig.update_traces(
+        fig.update_traces(
             z=C,
             zmin=zmin,
             zmax=zmax,
@@ -124,11 +124,14 @@ class ConnectivityViewHeatmap(ConnectivityView):
             selector=dict(name="main"),
         )
 
-
+        self.fig = fig
         return self.fig
-       
 
-class ConnectivityViewNode(ConnectivityView): 
+class HandlesGraphs():
+    def __init__(self):
+        pass
+
+class HandlesNodes(): 
     def __init__(
         self,
         chanlocs,
@@ -157,40 +160,9 @@ class ConnectivityViewNode(ConnectivityView):
         self._edge_trace_idx = {}
         self._colorbar_trace_idx = -999
 
-    def _get_candidate_edges(self, old_thresh_mask, new_thresh_mask, update_type, directed, n_nodes):
-
-        ij_iter = helpers._get_ij_iter(n_nodes=n_nodes, directed=directed)
-        changed_edges = []
-        # ---- ALL ----
-        if update_type is UpdateType.ALL:
-            changed_edges = [
-                ((i, j), self._edge_trace_idx[(i, j)])
-                for (i, j) in ij_iter
-                if (i, j) in self._edge_trace_idx
-            ]
-
-        # ---- COLOR ----, only get visible edges
-        if update_type is UpdateType.COLOR:
-            changed_edges = [
-                ((i, j), self._edge_trace_idx[(i, j)])
-                for (i, j) in ij_iter
-                if new_thresh_mask[i, j] and (i, j) in self._edge_trace_idx
-            ]
-        # ---- THRESHOLD ----, get edges which differ in their visibility between the old_thresh_mask and new_thresh_mask
-        if update_type is UpdateType.THRESHOLD:
-            diff = (old_thresh_mask != new_thresh_mask)
-            changed_edges = [
-                ((i, j), self._edge_trace_idx[(i, j)])
-                for (i, j) in ij_iter
-                if diff[i, j] and (i, j) in self._edge_trace_idx
-            ]
-            
-
-        print(f"Number edges: {len(changed_edges)}")
-        return changed_edges
 
     @abstractmethod
-    def update_locs(chanlocs):
+    def update_locs(self, chanlocs):
         pass
 
     @abstractmethod
@@ -209,158 +181,15 @@ class ConnectivityViewNode(ConnectivityView):
         pass
 
     @abstractmethod
-    def _build_arrowhead_trace(self, arrow_positions, arrow_vectors, arrow_vals, arrow_sizes,
-                              zmin, zmax):
-        """Return the aggregated arrowhead trace (or None)."""
+    def _build_base_trace(self):
         pass
 
-    # -------- SHARED LOGIC -------- #
-
+    @abstractmethod
     def _build_edge_traces(self, C: np.ndarray, color_min: float, color_max: float, labels, directed: bool, scale_info):
-        """Generic shared implementation used by both 2D and 3D."""
-        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C=C, color_min=color_min, color_max=color_max)
-
-        edge_traces = []
-        arrow_positions = []
-        arrow_vectors   = []
-        arrow_vals      = []
-        arrow_sizes     = []
-
-        for i, j in helpers._get_ij_iter(C.shape[0], directed):
-            w = float(C[i, j])
-
-            color = helpers._get_edge_color(edge=w, data_min=data_min, data_max=data_max)
-            width = helpers._get_edge_width(edge=w, scale=scale,
-                                         min_width=self.edge_size_min,
-                                         max_width=self.edge_size_max)
-
-            # polymorphic!
-            P = self._get_edge_path(i, j)
-
-            # polymorphic!
-            trace = self._make_edge_trace(P, color, width, i, j, w)
-            edge_traces.append(trace)
-
-            if directed:
-                pos_vec = self._collect_arrow(P, w)
-                if pos_vec is not None:
-                    pos, vec = pos_vec
-                    arrow_positions.append(pos)
-                    arrow_vectors.append(vec)
-                    arrow_vals.append(w)
-
-                    adj = helpers._normalize_weight(w, data_min, data_max)
-                    arrow_sizes.append(max(0.6, 0.6 * adj))
-
-        arrow_trace = None
-        ### ONLY 3D
-        if directed:
-            arrow_trace = self._build_arrowhead_trace(
-                arrow_positions, arrow_vectors, arrow_vals, arrow_sizes, zmin, zmax
-            )
-
-        return edge_traces, arrow_trace, (zmin, zmax)
-    
-
-    def build_figure(
-        self,
-        C: np.ndarray,
-        labels, 
-        directed: bool,
-        colorscale: str,
-    ) -> go.Figure:
-        ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
-        fig = go.Figure()
-        for tr in self._build_base_traces():
-            fig.add_trace(tr)
-
-        ### CREATE EDGES
-        edge_traces, (zmin, zmax) = self._build_edge_traces(C=C, 
-            directed=directed,
-        )
-        for tr in edge_traces:
-            fig.add_trace(tr)
-
-        ### CACHE EDGES (i, j) --> idx
-        labels = labels
-        self._edge_trace_idx = helpers._create_cache_edges(labels, fig)
-
-        ### CREATE COLOR BAR
-        colorbar_trace_idx = helpers._add_colorbar_trace(fig=fig, colorscale=colorscale,zmin=zmin,zmax=zmax, viz_type=VizType.FIG2D)
-        self._colorbar_trace_idx = colorbar_trace_idx
-
-        ### ADD REST OF LAYOUT
-        fig.update_layout(
-            xaxis=dict(
-                visible=False,
-                scaleanchor="y",
-                scaleratio=1,
-            ),
-            yaxis=dict(visible=False),
-            autosize=True,
-            margin=dict(l=0, r=0, t=40, b=0),
-            showlegend=False,
-            plot_bgcolor="white",
-        )
-
-        return fig
-
-    def update_figure( self,
-        C: np.ndarray,
-        labels, 
-        directed: bool,
-        colorscale: str,
-        update_type:UpdateType,
-        new_thresh_mask: Optional[np.ndarray],
-        old_thresh_mask: Optional[np.ndarray],
-    ) -> go.Figure:
-        
-        fig = self.fig
-        if fig is None:
-            # safety: fall back to full build if cache is missing
-            return self.build_figure(C=C, labels=labels, directed=directed, colorscale=colorscale)
-        
-        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C)
-
-        with fig.batch_update():
-
-            traces_list = self._get_candidate_edges(old_thresh_mask=old_thresh_mask, new_thresh_mask=new_thresh_mask, update_type=update_type, directed=directed, n_nodes=C.shape[0])
-
-            for (i, j), idx in traces_list:
-                ### GET EDGE's CONN and MASK (BOOL)
-                w = C[i, j]
-                m = new_thresh_mask[i, j]
-
-                ### TRIED GETTING RID OF CHECK OF IDX
-                # if idx is None:
-                #     continue  # should not happen if build/setup is consistent
-
-                ### GET TRACE
-                trace = fig.data[idx]
-                
-                ### HIDE IF MASK == FALSE
-                if not m:
-                    trace.opacity = 0.0
-                    trace.hoverinfo = "skip"
-                    trace.text = ""
-                    continue
-
-                ### GET COLOR
-                color = helpers._get_edge_color(edge=w, data_max=data_max, data_min=data_min)
-
-                ### GET WIDTH
-                width = helpers._get_edge_width(edge=w, scale=scale, min_width=self.edge_size_min, max_width=self.edge_size_max)
-
-                ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE THIS AN UPDATEABLE VALUE
-                helpers._update_edge_trace(trace, w, color, width, 0.75, labels[i], labels[j])
-
-            # UPDATE COLOR BAR (MAKE THIS FUNCTION)
-            helpers._update_colorbar(fig, self._colorbar_trace_idx, colorscale, zmin, zmax)
-        return fig
-    
+        pass
 
 
-class ConnectivityView2D(ConnectivityViewNode):
+class ConnectivityView2D(ConnectivityView, HandlesNodes):
     def __init__(
         self,
         chanlocs,
@@ -466,10 +295,6 @@ class ConnectivityView2D(ConnectivityViewNode):
             return None
         return (pos, vec / L)
 
-    def _build_arrowhead_trace(self, pos_list, vec_list, vals, sizes, zmin, zmax):
-        # 2D arrows can use Scattergl with arrow markers
-        return None  # or implement later
-
     def _build_edge_traces(
         self,
         C: np.ndarray,
@@ -528,9 +353,107 @@ class ConnectivityView2D(ConnectivityViewNode):
                 )
 
         return edge_traces, (zmin, zmax)
+    
+    def build_figure(
+        self,
+        C: np.ndarray,
+        labels, 
+        directed: bool,
+        colorscale: str,
+    ) -> go.Figure:
+        ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
+        fig = go.Figure()
+        for tr in self._build_base_traces():
+            fig.add_trace(tr)
+
+        ### CREATE EDGES
+        edge_traces, (zmin, zmax) = self._build_edge_traces(C=C, 
+            directed=directed,
+        )
+        for tr in edge_traces:
+            fig.add_trace(tr)
+
+        ### CACHE EDGES (i, j) --> idx
+        labels = labels
+        self._edge_trace_idx = helpers._create_cache_edges(labels, fig)
+
+        ### CREATE COLOR BAR
+        colorbar_trace_idx = helpers._add_colorbar_trace(fig=fig, colorscale=colorscale,zmin=zmin,zmax=zmax, viz_type=VizType.FIG2D)
+        self._colorbar_trace_idx = colorbar_trace_idx
+
+        ### ADD REST OF LAYOUT
+        fig.update_layout(
+            xaxis=dict(
+                visible=False,
+                scaleanchor="y",
+                scaleratio=1,
+            ),
+            yaxis=dict(visible=False),
+            autosize=True,
+            margin=dict(l=0, r=0, t=40, b=0),
+            showlegend=False,
+            plot_bgcolor="white",
+        )
+
+        self.fig = fig
+        return fig
+
+    def update_figure( self,
+        C: np.ndarray,
+        labels, 
+        directed: bool,
+        colorscale: str,
+        update_type:UpdateType,
+        new_thresh_mask: Optional[np.ndarray],
+        old_thresh_mask: Optional[np.ndarray],
+    ) -> go.Figure:
+        
+        fig = self.fig
+        if fig is None:
+            # safety: fall back to full build if cache is missing
+            return self.build_figure(C=C, labels=labels, directed=directed, colorscale=colorscale)
+        
+        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C)
+
+        with fig.batch_update():
+
+            traces_list = helpers._get_candidate_edges(old_thresh_mask=old_thresh_mask, new_thresh_mask=new_thresh_mask, update_type=update_type, directed=directed, n_nodes=C.shape[0])
+
+            for (i, j), idx in traces_list:
+                ### GET EDGE's CONN and MASK (BOOL)
+                w = C[i, j]
+                m = new_thresh_mask[i, j]
+
+                ### TRIED GETTING RID OF CHECK OF IDX
+                # if idx is None:
+                #     continue  # should not happen if build/setup is consistent
+
+                ### GET TRACE
+                trace = fig.data[idx]
+                
+                ### HIDE IF MASK == FALSE
+                if not m:
+                    trace.opacity = 0.0
+                    trace.hoverinfo = "skip"
+                    trace.text = ""
+                    continue
+
+                ### GET COLOR
+                color = helpers._get_edge_color(edge=w, data_max=data_max, data_min=data_min)
+
+                ### GET WIDTH
+                width = helpers._get_edge_width(edge=w, scale=scale, min_width=self.edge_size_min, max_width=self.edge_size_max)
+
+                ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE THIS AN UPDATEABLE VALUE
+                helpers._update_edge_trace(trace, w, color, width, 0.75, labels[i], labels[j])
+
+            # UPDATE COLOR BAR (MAKE THIS FUNCTION)
+            helpers._update_colorbar(fig, self._colorbar_trace_idx, colorscale, zmin, zmax)
+        self.fig = fig
+        return fig
 
 
-class ConnectivityView3D(ConnectivityViewNode):
+class ConnectivityView3D(ConnectivityView, HandlesNodes):
     def __init__(
         self,
         chanlocs,
@@ -568,16 +491,9 @@ class ConnectivityView3D(ConnectivityViewNode):
         i: int,
         j: int,
         C: np.ndarray,
-        data_min: float,
-        data_max: float,
         arc_radius: Optional[float] = None,
         m: int = 60
     ) -> np.ndarray:
-        """
-        Builds a smooth 3D arc (with optional offset for bidirectional edges).
-        Returns P as an (m, 3) NumPy array.
-        """
-
         p0 = self.locs[i]
         p1 = self.locs[j]
 
@@ -627,56 +543,30 @@ class ConnectivityView3D(ConnectivityViewNode):
         return P
 
 
-    def _build_base_traces(self) -> List[go.Scattergl]:
-            """Head outline, nose, and node markers (no edges)."""
-            theta = np.linspace(0, 2 * np.pi, 256)
-            x, y = self.xy_topo[:, 0], self.xy_topo[:, 1]
-
-            head = go.Scattergl(
-                x=np.cos(theta),
-                y=np.sin(theta),
-                mode="lines",
-                line=dict(color="black", width=2),
-                hoverinfo="skip",
-                name="Head",
+    def _build_base_traces(self, brain_mesh: Optional[pv.PolyData]) -> List[go.Scattergl]:
+        if brain_mesh is not None and pv is not None and brain_mesh.n_points > 0:
+            pts = np.asarray(brain_mesh.points)
+            faces_np = np.asarray(brain_mesh.faces)
+            faces = faces_np.reshape(-1, 4)[:, 1:4].astype(int)
+            head = go.Mesh3d(
+                x=pts[:, 0], y=pts[:, 1], z=pts[:, 2],
+                i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
+                color="lightgray", opacity=0.25, flatshading=True,
+                lighting=dict(ambient=0.6, diffuse=0.6, specular=0.1),
+                name="Brain"
             )
 
-            nose = go.Scattergl(
-                x=[0.10, 0.00, -0.10],
-                y=[1.00, 1.10, 1.00],
-                mode="lines",
-                line=dict(color="black", width=2),
-                name="Nose",
-                hoverinfo="skip",
-                showlegend=False,
-            )
-
-            nodes = go.Scattergl(
-                x=x,
-                y=y,
-                mode="markers+text" if self.show_labels else "markers",
-                text=self.labels if self.show_labels else None,
-                textposition="middle center",
-                marker=dict(
-                    size=self.node_size_2d,
-                    color=self.node_fill,
-                    line=dict(color=self.node_edge, width=2),
-                ),
-                hovertext=self.labels,
-                hoverinfo="text",
-                name="Electrodes",
-            )
-
-            return [head, nose, nodes]
-    
-    def _get_edge_path(self, i: int, j: int, use_arcs: bool, curvature: float) -> np.ndarray:
-        p0 = self.locs[i]
-        p1 = self.locs[j]
-        if use_arcs:
-            P = helpers._quad_bezier(p0, p1, curvature, m=60)
-        else:
-            P = np.vstack([p0, p1])
-        return P
+        x, y, z = self.xyz[:, 0], self.xyz[:, 1], self.xyz[:, 2]
+        nodes = go.Scatter3d(
+            x=x, y=y, z=z,
+            mode="markers+text" if self.show_labels else "markers",
+            text=self.labels if self.show_labels else None,
+            textposition="top center",
+            textfont=dict(size=10, color="black"),
+            marker=dict(size=self.node_size_3d),
+            name="Electrodes"
+        )
+        return [head, nodes]
     
     def _make_edge_trace(self, P, color, width, i, j, w):
         return go.Scattergl(
@@ -691,10 +581,12 @@ class ConnectivityView3D(ConnectivityViewNode):
         )
     
     def _collect_arrow(self, P, w):
-        if len(P) < 2: 
+        if len(P) < 2:
             return None
+
         q0, q1 = P[-2], P[-1]
         pos = q1 - 0.05 * (q1 - q0)
+
         vec = q1 - q0
         L = np.linalg.norm(vec)
         if L < 1e-9:
@@ -702,8 +594,24 @@ class ConnectivityView3D(ConnectivityViewNode):
         return (pos, vec / L)
 
     def _build_arrowhead_trace(self, pos_list, vec_list, vals, sizes, zmin, zmax):
-        # 2D arrows can use Scattergl with arrow markers
-        return None  # or implement later
+        if not pos_list:
+            return None
+
+        xs, ys, zs = zip(*pos_list)
+        us, vs, ws = zip(*vec_list)
+
+        return go.Cone(
+            x=xs, y=ys, z=zs,
+            u=us, v=vs, w=ws,
+            color=vals,
+            sizeref=max(0.5, float(np.nanmax(sizes))),
+            sizemode="absolute",
+            showscale=False,
+            colorscale=self.colorscale,
+            cmin=zmin, cmax=zmax,
+            anchor="tip",
+            name="arrows",
+        )
 
     def _build_edge_traces(
         self,
@@ -763,3 +671,140 @@ class ConnectivityView3D(ConnectivityViewNode):
                 )
 
         return edge_traces, (zmin, zmax)
+    
+    # edge_traces = []
+    #     arrow_positions = []
+    #     arrow_vectors   = []
+    #     arrow_vals      = []
+    #     arrow_sizes     = []
+
+    #     for i, j in self.get_ij_iter(brain_data.n_nodes, brain_data.directed):
+    #         w = float(C[i, j])
+
+    #         color = self._get_edge_color(edge=w, data_min=data_min, data_max=data_max)
+    #         width = self._get_edge_width(edge=w, scale=scale,
+    #                                      min_width=self.min_width,
+    #                                      max_width=self.max_width)
+
+    #         # polymorphic!
+    #         P = self.get_edge_path(i, j)
+
+    #         # polymorphic!
+    #         trace = self.make_edge_trace(P, color, width, i, j, w)
+    #         edge_traces.append(trace)
+
+    #         if brain_data.directed:
+    #             pos_vec = self.collect_arrow(P, w)
+    #             if pos_vec is not None:
+    #                 pos, vec = pos_vec
+    #                 arrow_positions.append(pos)
+    #                 arrow_vectors.append(vec)
+    #                 arrow_vals.append(w)
+
+    #                 adj = self._normalize_weight(w, data_min, data_max)
+    #                 arrow_sizes.append(max(0.6, 0.6 * adj))
+
+    #     arrow_trace = None
+    #     if brain_data.directed:
+    #         arrow_trace = self.build_arrowhead_trace(
+    #             arrow_positions, arrow_vectors, arrow_vals, arrow_sizes, zmin, zmax
+    #         )
+
+    #     return edge_traces, arrow_trace, (zmin, zmax)
+
+    
+    def build_figure(
+        self,
+        C: np.ndarray,
+        labels, 
+        directed: bool,
+        colorscale: str,
+    ) -> go.Figure:
+        ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
+        fig = go.Figure()
+        for tr in self._build_base_traces():
+            fig.add_trace(tr)
+
+        ### CREATE EDGES
+        edge_traces, (zmin, zmax) = self._build_edge_traces(C=C, 
+            directed=directed,
+        )
+        for tr in edge_traces:
+            fig.add_trace(tr)
+
+        ### CACHE EDGES (i, j) --> idx
+        labels = labels
+        self._edge_trace_idx = helpers._create_cache_edges(labels, fig)
+
+        ### CREATE COLOR BAR
+        colorbar_trace_idx = helpers._add_colorbar_trace(fig=fig, colorscale=colorscale,zmin=zmin,zmax=zmax, viz_type=VizType.FIG2D)
+        self._colorbar_trace_idx = colorbar_trace_idx
+
+        ### ADD REST OF LAYOUT
+        fig.update_layout(
+            xaxis=dict(
+                visible=False,
+                scaleanchor="y",
+                scaleratio=1,
+            ),
+            yaxis=dict(visible=False),
+            autosize=True,
+            margin=dict(l=0, r=0, t=40, b=0),
+            showlegend=False,
+            plot_bgcolor="white",
+        )
+
+        return fig
+
+    def update_figure( self,
+        C: np.ndarray,
+        labels, 
+        directed: bool,
+        colorscale: str,
+        update_type:UpdateType,
+        new_thresh_mask: Optional[np.ndarray],
+        old_thresh_mask: Optional[np.ndarray],
+    ) -> go.Figure:
+        
+        fig = self.fig
+        if fig is None:
+            # safety: fall back to full build if cache is missing
+            return self.build_figure(C=C, labels=labels, directed=directed, colorscale=colorscale)
+        
+        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C)
+
+        with fig.batch_update():
+
+            traces_list = helpers._get_candidate_edges(old_thresh_mask=old_thresh_mask, new_thresh_mask=new_thresh_mask, update_type=update_type, directed=directed, n_nodes=C.shape[0])
+
+            for (i, j), idx in traces_list:
+                ### GET EDGE's CONN and MASK (BOOL)
+                w = C[i, j]
+                m = new_thresh_mask[i, j]
+
+                ### TRIED GETTING RID OF CHECK OF IDX
+                # if idx is None:
+                #     continue  # should not happen if build/setup is consistent
+
+                ### GET TRACE
+                trace = fig.data[idx]
+                
+                ### HIDE IF MASK == FALSE
+                if not m:
+                    trace.opacity = 0.0
+                    trace.hoverinfo = "skip"
+                    trace.text = ""
+                    continue
+
+                ### GET COLOR
+                color = helpers._get_edge_color(edge=w, data_max=data_max, data_min=data_min)
+
+                ### GET WIDTH
+                width = helpers._get_edge_width(edge=w, scale=scale, min_width=self.edge_size_min, max_width=self.edge_size_max)
+
+                ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE THIS AN UPDATEABLE VALUE
+                helpers._update_edge_trace(trace, w, color, width, 0.75, labels[i], labels[j])
+
+            # UPDATE COLOR BAR (MAKE THIS FUNCTION)
+            helpers._update_colorbar(fig, self._colorbar_trace_idx, colorscale, zmin, zmax)
+        return fig
