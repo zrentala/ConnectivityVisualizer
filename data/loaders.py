@@ -14,7 +14,6 @@ from dash import no_update
 
 from data.simulation import Simulation
 from utils.braindata import BrainData
-from visualization.brainvisualizer import ConnectivityVisualizer
 from utils.global_app_state import GlobalAppState
 
 

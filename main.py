@@ -2,14 +2,11 @@
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-import mne
 import pyvista as pv
 from dash import Dash
 import dash_bootstrap_components as dbc
 
-from visualization.brainvisualizer import ConnectivityVisualizer
 from visualization.ui import create_layout
-from data.simulation import Simulation
 from interaction.callbacks import register_callbacks
 from utils.global_app_state import GlobalAppState
 from analysis.threshold import Threshold

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Iterable, Optional, Tuple, Union, List
+from typing import Iterable, Optional, Tuple, Union, List, Dict
 
 import numpy as np
 import pandas as pd
@@ -13,7 +13,7 @@ from analysis.threshold import Threshold
 from visualization.vizhelpers import VizType, UpdateType
 
 import visualization.vizhelpers as helpers
-from visualization.vizconn import ConnectivityView2D, ConnectivityView3D, ConnectivityViewHeatmap
+from visualization.vizconn import ConnectivityView2D, ConnectivityView3D, ConnectivityViewHeatmap, ConnectivityView
 try:
     import pyvista as pv
 except Exception:  # make pv optional
@@ -30,8 +30,14 @@ class Channel:
     # z is optional for 3D; if absent, zeros are assumed
     z: Optional[float] = None
 
-
 class VizUIManager:
+    """
+    Manages UI state for connectivity visualization and delegates figure
+    construction to specialized ConnectivityView classes.
+
+    Does NOT store brain_data or threshold internally.
+    """
+
     def __init__(
         self,
         brain_data: BrainData,
@@ -40,92 +46,96 @@ class VizUIManager:
         colorscale: str = "Viridis",
         color_min: float = 0.0,
         color_max: float = 1.0,
-        show_labels: bool = True,
         viz_type: VizType = VizType.FIG2D,
     ) -> None:
 
         # -----------------------
-        # Core settings
+        # Core UI/settings fields
         # -----------------------
         self.conn_idx = conn_idx
         self.colorscale = colorscale
         self.color_min = color_min
         self.color_max = color_max
         self.viz_type = viz_type
-        self.viz_dict = {VizType.FIG2D: ConnectivityView2D(chanlocs=brain_data.chanlocs, show_labels=show_labels)}
+
+        # Internal cached threshold mask
+        self._mask_cache = None
+
+        # -----------------------
+        # Build visualizers immediately
+        # but DO NOT store brain_data
+        # -----------------------
+        self.viz_dict = {
+            VizType.FIG2D: ConnectivityView2D(chanlocs=brain_data.chanlocs),
+            VizType.FIG3D: ConnectivityView3D(chanlocs=brain_data.chanlocs),
+            VizType.FIGHEATMAP: ConnectivityViewHeatmap(),
+        }
         self.build_figure(brain_data=brain_data, threshold=threshold)
 
-    # --------- Boilerplate ----------
-
-    # def __repr__(self) -> str:
-    #     return (
-    #         f"{self.__class__.__name__}("
-    #         f"conn_idx={self.conn_idx}, "
-    #         f"colorscale={self.colorscale!r}, "
-    #         f"color_min={self.color_min}, "
-    #         f"color_max={self.color_max}, "
-    #         f"node_size={self.node_size}, "
-    #         f"show_labels={self.show_labels}, "
-    #         f"viz_type={self.viz_type!r}"
-    #         f")"
-    #     )
-    
-    # def __eq__(self, other) -> bool:
-    #     """Two visualizers are considered equal if all configuration fields match."""
-    #     if not isinstance(other, ConnectivityVisualizer):
-    #         return False
-
-    #     return (
-    #         self.conn_idx == other.conn_idx
-    #         and self.colorscale == other.colorscale
-    #         and self.color_min == other.color_min
-    #         and self.color_max == other.color_max
-    #         and self.node_size == other.node_size
-    #         and self.show_labels == other.show_labels
-    #         and self.default_pos_color == other.default_pos_color
-    #         and self.default_neg_color == other.default_neg_color
-    #         and self.node_fill == other.node_fill
-    #         and self.node_edge == other.node_edge
-    #         and self.viz_type == other.viz_type
-    #     )
-    
-    # ---------- Shared helpers ----------
-    
-    # ---------- Utils ----------
-    def update(self, brain_data, threshold, update_type, viz_updates):
+    # ------------------------------------------------------------------
+    # UI update
+    # ------------------------------------------------------------------
+    def update_attributes(self, viz_updates: dict):
         self.conn_idx = viz_updates["conn_idx"]
         self.colorscale = viz_updates["colorscale"]
         self.color_max = viz_updates["color_max"]
         self.color_min = viz_updates["color_min"]
+        self.viz_type = viz_updates["viz_type"]
 
-        ### SWITCH VIZ NEED TO FIX
-        if self.viz_type != viz_updates["viz_type"]:
-            self.viz_type = viz_updates["viz_type"]
-            BROKEN
-            self.viz.build_figure(brain_data, threshold)
+        # forward attribute updates to active visualizer
+        self.viz_dict[self.viz_type].update_attributes(viz_updates)
 
-        
-        self.viz.update_figure()
-        # inefficient?? building then updating?
+    # ------------------------------------------------------------------
+    # Build new figure
+    # ------------------------------------------------------------------
+    def build_figure(self, brain_data: BrainData, threshold: Threshold):
+        C = helpers._get_mat_at_idx(brain_data.conn_mat, self.conn_idx)
+        np.fill_diagonal(C, 0.0)
 
-    
+        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C, color_min=self.color_min, color_max=self.color_max)
+
+        color_scale_info = (scale, data_min, data_max, zmin, zmax, self.colorscale)
+
+        # compute and store threshold mask
+        self._mask_cache = threshold.apply_threshold(
+            brain_data.conn_mat, self.conn_idx
+        )
+
+        self.viz_dict[self.viz_type].build_figure(
+            C=C,
+            labels=brain_data.labels,
+            directed=brain_data.directed,
+            color_scale_info= color_scale_info
+        )
+
+    # ------------------------------------------------------------------
+    # Update figure in place (fast)
+    # ------------------------------------------------------------------
+    def update_figure(self, brain_data: BrainData, threshold: Threshold, update_type: UpdateType):
+        C = helpers._get_mat_at_idx(brain_data.conn_mat, self.conn_idx)
+        np.fill_diagonal(C, 0.0)
+
+        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C, color_min=self.color_min, color_max=self.color_max)
+
+        color_scale_info = (scale, data_min, data_max, zmin, zmax, self.colorscale)
+
+        old_mask = self._mask_cache
+        new_mask = threshold.apply_threshold(brain_data.conn_mat, self.conn_idx)
+        self._mask_cache = new_mask.copy()
+
+        self.viz_dict[self.viz_type].update_figure(
+            C=C,
+            labels=brain_data.labels,
+            directed=brain_data.directed,
+            update_type=update_type,
+            new_thresh_mask=new_mask,
+            old_thresh_mask=old_mask,
+            color_scale_info=color_scale_info
+        )
+
+    # ------------------------------------------------------------------
     def get_figure(self) -> go.Figure:
-        return self.viz.fig
-
-    def build_figure(self, brain_data: BrainData, threshold: Threshold) -> go.Figure:
-        # get current matrix to get scale and range of data for new traces 
-        C = helpers._get_mat_at_idx(brain_data.conn_mat, self.conn_idx)
-        np.fill_diagonal(C, 0.0)
-        new_thresh_mask = threshold.apply_threshold(brain_data.conn_mat, self.conn_idx)
-        self._mask_cache = new_thresh_mask
-
-        self.viz.build_figure(C=C, colorscale=self.colorscale, labels=brain_data.labels, directed=brain_data.directed)
-        
-    def update_figure(self, brain_data: BrainData, threshold: Threshold, update_type: UpdateType) -> go.Figure:
-        """Get the current figure based on viz_type."""
-        C = helpers._get_mat_at_idx(brain_data.conn_mat, self.conn_idx)
-        np.fill_diagonal(C, 0.0)
-        new_thresh_mask = threshold.apply_threshold(brain_data.conn_mat, self.conn_idx)
-        old_thresh_mask = self._mask_cache
-        new_thresh_mask = old_thresh_mask.copy()
-        self.viz.update_figure(C=C, colorscale=self.colorscale, labels=brain_data.labels, directed=brain_data.directed, update_type=update_type, new_thresh_mask=new_thresh_mask, old_thresh_mask=old_thresh_mask)
+        return self.viz_dict[self.viz_type].fig
+    
+    def get_viz_class(self) -> ConnectivityView:
+        return self.viz_dict[self.viz_type]
