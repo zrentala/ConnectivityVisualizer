@@ -13,7 +13,7 @@ from analysis.threshold import Threshold
 from visualization.vizhelpers import VizType, UpdateType
 
 import visualization.vizhelpers as helpers
-
+from visualization.vizconn import ConnectivityView2D, ConnectivityView3D, ConnectivityViewHeatmap
 try:
     import pyvista as pv
 except Exception:  # make pv optional
@@ -40,7 +40,6 @@ class VizUIManager:
         colorscale: str = "Viridis",
         color_min: float = 0.0,
         color_max: float = 1.0,
-
         show_labels: bool = True,
         viz_type: VizType = VizType.FIG2D,
     ) -> None:
@@ -53,8 +52,7 @@ class VizUIManager:
         self.color_min = color_min
         self.color_max = color_max
         self.viz_type = viz_type
-        self.show_labels = show_labels
-        self.viz = ConnectivityView() 
+        self.viz_dict = {VizType.FIG2D: ConnectivityView2D(chanlocs=brain_data.chanlocs, show_labels=show_labels)}
         self.build_figure(brain_data=brain_data, threshold=threshold)
 
     # --------- Boilerplate ----------
