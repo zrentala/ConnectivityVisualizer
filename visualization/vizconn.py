@@ -20,17 +20,23 @@ from visualization.vizhelpers import VizType, UpdateType, Channel
 
 class ConnectivityView(ABC):
 
-    def __init__(self):
+    def __init__(
+            self,
+            default_pos_color: str = "red",
+            default_neg_color: str = "blue"
+            ):
         self.fig = None
+        self.default_pos_color = default_pos_color
+        self.default_neg_color = default_neg_color
         # self.build_figure(brain_data=brain_data, threshold=threshold)
     """Interface for all connectivity visualizers (2D, 3D, heatmap, etc.)."""
     @abstractmethod
     def build_figure(
         self,
         C: np.ndarray,
-        labels, 
+        labels,
         directed: bool,
-        colorscale: str,
+        color_scale_info,
     ) -> go.Figure:
         pass
     @abstractmethod
@@ -39,32 +45,99 @@ class ConnectivityView(ABC):
         C: np.ndarray,
         labels, 
         directed: bool,
-        colorscale: str,
         update_type:UpdateType,
+        color_scale_info,
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
     ) -> go.Figure:
         pass
 
     @abstractmethod
-    def update_attributes(self):
+    def update_attributes(self, viz_updates):
         pass
 
-# class NodeView()
+
+class HandlesGraphs():
+    def __init__(self):
+        pass
+
+class HandlesNodes(): 
+    def __init__(
+        self,
+        chanlocs,
+        node_size: float = 10.0,
+        edge_size_min: float = 0.4,
+        edge_size_max: float = 4.0,
+        arc_radius: float=1.0,
+        
+        node_fill: str = "lightgreen",
+        node_edge: str = "black",
+    ) -> None:
+        self.node_size = node_size
+        self.edge_size_min = edge_size_min
+        self.edge_size_max = edge_size_max
+        self.node_fill = node_fill
+        self.node_edge = node_edge
+        self.arc_raidus = arc_radius
+        self.locs: np.ndarray = np.empty((0, 2), dtype=float) # (n, 2)
+        self.update_locs(chanlocs)
+
+        # caches
+        self._edge_trace_idx = {}
+        self._colorbar_trace_idx = -999
+
+
+    @abstractmethod
+    def update_locs(self, chanlocs):
+        pass
+
+    @abstractmethod
+    def _get_edge_path(self, i: int, j: int, *args, **kwargs) -> np.ndarray:
+        """Return NxD array of coordinates for the edge."""
+        pass
+
+    @abstractmethod
+    def _make_edge_trace(self, P: np.ndarray, color: str, width: float, i: int, j: int, w: float, labels: bool):
+        """Return the Plotly trace representing the edge."""
+        pass
+
+    @abstractmethod
+    def _collect_arrow(self, P: np.ndarray, w: float):
+        """Extract arrow position + direction from path."""
+        pass
+
+    @abstractmethod
+    def _build_base_trace(self, labels):
+        pass
+
+    @abstractmethod
+    def _build_edge_traces(self, C: np.ndarray, labels, directed: bool, color_scale_info):
+        pass
+
 
 class ConnectivityViewHeatmap(ConnectivityView):
+    def __init__(
+        self,
+        default_pos_color: str = "red",
+        default_neg_color: str = "blue",
+    ):
+        super().__init__(
+            default_pos_color=default_pos_color,
+            default_neg_color=default_neg_color,
+        )
+
 
     def build_figure(
         self,
-        *,
-        C:np.ndarray, 
-        colorscale: str, 
-        labels, 
-    ) -> go.Figure:
+        C: np.ndarray,
+        labels,
+        directed: bool,
+        color_scale_info,
+    ):
         fig = go.Figure()
 
         # Color range: compute full-data min/max then map color_min/color_max (0..1) into that range
-        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C)
+        scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
 
         ### CREATE HEATMAP, WE DO NOT NEED TO CREATE IT'S OWN COLORBAR
         fig.add_trace(go.Heatmap(
@@ -104,96 +177,38 @@ class ConnectivityViewHeatmap(ConnectivityView):
         self.fig = fig
         return fig
 
-    def update_figure( self,
+    def update_figure(
+        self,
         C: np.ndarray,
         labels, 
         directed: bool,
-        colorscale: str,
         update_type:UpdateType,
+        color_scale_info,
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
     ) -> go.Figure:
         fig = self.fig
-        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C)
+        scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
 
         fig.update_traces(
             z=C,
             zmin=zmin,
             zmax=zmax,
-            colorscale=self.colorscale,
+            colorscale=colorscale,
             selector=dict(name="main"),
         )
 
         self.fig = fig
         return self.fig
-
-class HandlesGraphs():
-    def __init__(self):
-        pass
-
-class HandlesNodes(): 
-    def __init__(
-        self,
-        chanlocs,
-        show_labels:bool =True,
-        # 2D settings
-        node_size: float = 10.0,
-        edge_size_min: float = 0.4,
-        edge_size_max: float = 4.0,
-        default_pos_color: str = "red",
-        default_neg_color: str = "blue",
-        node_fill: str = "lightgreen",
-        node_edge: str = "black",
-    ) -> None:
-        self.show_labels = show_labels
-        self.node_size = node_size
-        self.edge_size_min = edge_size_min
-        self.edge_size_max = edge_size_max
-        self.node_fill = node_fill
-        self.node_edge = node_edge
-        self.default_pos_color = default_pos_color
-        self.default_neg_color = default_neg_color
-        self.locs: np.ndarray = np.empty((0, 2), dtype=float) # (n, 2)
-        self.update_locs(chanlocs)
-
-        # caches
-        self._edge_trace_idx = {}
-        self._colorbar_trace_idx = -999
-
-
-    @abstractmethod
-    def update_locs(self, chanlocs):
-        pass
-
-    @abstractmethod
-    def _get_edge_path(self, i: int, j: int, *args, **kwargs) -> np.ndarray:
-        """Return NxD array of coordinates for the edge."""
-        pass
-
-    @abstractmethod
-    def _make_edge_trace(self, P: np.ndarray, color: str, width: float, i: int, j: int, w: float):
-        """Return the Plotly trace representing the edge."""
-        pass
-
-    @abstractmethod
-    def _collect_arrow(self, P: np.ndarray, w: float):
-        """Extract arrow position + direction from path."""
-        pass
-
-    @abstractmethod
-    def _build_base_trace(self):
-        pass
-
-    @abstractmethod
-    def _build_edge_traces(self, C: np.ndarray, color_min: float, color_max: float, labels, directed: bool, scale_info):
-        pass
+    
+    def update_attributes(self, viz_updates):
+        return
 
 
 class ConnectivityView2D(ConnectivityView, HandlesNodes):
     def __init__(
         self,
         chanlocs,
-        show_labels:bool =True,
         node_size: float = 10.0,
         edge_size_min: float = 0.4,
         edge_size_max: float = 4.0,
@@ -202,29 +217,36 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         node_fill: str = "lightgreen",
         node_edge: str = "black",
     ) -> None:
-        self.show_labels = show_labels
-        super().__init__(chanlocs=chanlocs, 
-                         show_labels=show_labels, 
-                         node_size=node_size, 
-                         edge_size_max=edge_size_max, 
-                         edge_size_min=edge_size_min,
-                         default_pos_color=default_pos_color,
-                         default_neg_color=default_neg_color, 
-                         node_fill=node_fill,
-                         node_edge=node_edge)
+        ConnectivityView.__init__(self, default_pos_color=default_pos_color,
+            default_neg_color=default_neg_color,)  # no args
+        HandlesNodes.__init__(
+            self,
+            chanlocs=chanlocs,
+            node_size=node_size,
+            edge_size_min=edge_size_min,
+            edge_size_max=edge_size_max,
+            node_fill=node_fill,
+            node_edge=node_edge,
+        )
        
-    def update_locs(chanlocs):
+    def update_attributes(self, viz_updates):
+        self.node_size = viz_updates["node_size_2d"]
+        self.edge_size_min = viz_updates["edge_min_2d"]
+        self.edge_size_max = viz_updates["edge_max_2d"]
+        # self.update_locs(viz_updates["chanlocs"])
+
+    def update_locs(self, chanlocs):
            # Parse → sx, sy, sz, labels
         sx, sy, sz, labs = helpers.parse_channel_locs(chanlocs)
 
         # 2D normalized topography
-        return helpers.compute_xy_topo(sx, sy)
+        self.locs = helpers.compute_locs_2d_topo(sx, sy)
 
 
-    def _build_base_traces(self) -> List[go.Scattergl]:
+    def _build_base_traces(self, labels) -> List[go.Scattergl]:
             """Head outline, nose, and node markers (no edges)."""
             theta = np.linspace(0, 2 * np.pi, 256)
-            x, y = self.xy_topo[:, 0], self.xy_topo[:, 1]
+            x, y = self.locs[:, 0], self.locs[:, 1]
 
             head = go.Scattergl(
                 x=np.cos(theta),
@@ -248,31 +270,31 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             nodes = go.Scattergl(
                 x=x,
                 y=y,
-                mode="markers+text" if self.show_labels else "markers",
-                text=self.labels if self.show_labels else None,
+                mode="markers+text",
+                text=labels,
                 textposition="middle center",
                 marker=dict(
-                    size=self.node_size_2d,
+                    size=self.node_size,
                     color=self.node_fill,
                     line=dict(color=self.node_edge, width=2),
                 ),
-                hovertext=self.labels,
+                hovertext=labels,
                 hoverinfo="text",
                 name="Electrodes",
             )
 
             return [head, nose, nodes]
     
-    def _get_edge_path(self, i: int, j: int, use_arcs: bool, curvature: float) -> np.ndarray:
+    def _get_edge_path(self, i: int, j: int, use_arcs: bool) -> np.ndarray:
         p0 = self.locs[i]
         p1 = self.locs[j]
         if use_arcs:
-            P = helpers._quad_bezier(p0, p1, curvature, m=60)
+            P = helpers._quad_bezier(p0, p1, self.arc_radius, m=60)
         else:
             P = np.vstack([p0, p1])
         return P
     
-    def _make_edge_trace(self, P, color, width, i, j, w):
+    def _make_edge_trace(self, P, color, width, i, j, w, labels):
         return go.Scattergl(
             x=P[:, 0], y=P[:, 1],
             mode="lines",
@@ -280,8 +302,8 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             opacity=0.75,
             showlegend=False,
             hoverinfo="text",
-            text=f"{self.labels[i]} → {self.labels[j]}<br>Weight: {w:.3f}",
-            name=f"{self.labels[i]},{self.labels[j]}",
+            text=f"{labels[i]} → {labels[j]}<br>Weight: {w:.3f}",
+            name=f"{labels[i]},{labels[j]}",
         )
     
     def _collect_arrow(self, P, w):
@@ -300,9 +322,10 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         C: np.ndarray,
         directed: bool,
         labels,
-        curvature: float,
+        color_scale_info
     ) -> List[go.Scattergl]:
-        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C)
+        scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
+        
         # set up these traces
         edge_traces: List[go.Scattergl] = []
         n_nodes = C.shape[0]
@@ -314,13 +337,13 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
 
             ### GET EDGE COLOR (MAYBE FUNCTION??)
             # Normalize weight to signed [data_min, data_max] then to [0,1]
-            color = helpers._get_edge_color(edge_weight=w, data_max=data_max, data_min=data_min)
+            color = helpers._get_edge_color(edge_weight=w, zmin=zmin, zmax=zmax, colorscale=colorscale, default_neg_color=self.default_neg_color, default_pos_color=self.default_pos_color)
 
             ### GET EDGE WIDTH 
             width = helpers._get_edge_width(edge_weight=w, scale=scale, min_width=self.edge_size_min, max_width=self.edge_size_max)
 
             ### GET EDGE PATH
-            P = self._get_edge_path(i, j, use_arcs=directed, curvature=curvature)
+            P = self._get_edge_path(i, j, use_arcs=directed)
 
             ### ADD TO EDGE TRACE LIST. CREATES EDGE
             edge_traces.append(
@@ -357,19 +380,22 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
     def build_figure(
         self,
         C: np.ndarray,
-        labels, 
+        labels,
         directed: bool,
-        colorscale: str,
+        color_scale_info,
     ) -> go.Figure:
+        scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
         fig = go.Figure()
-        for tr in self._build_base_traces():
+        for tr in self._build_base_traces(labels=labels):
             fig.add_trace(tr)
 
         ### CREATE EDGES
-        edge_traces, (zmin, zmax) = self._build_edge_traces(C=C, 
-            directed=directed,
-        )
+        edge_traces = self._build_edge_traces(C=C, 
+                                            labels=labels,
+                                            directed=directed,
+                                            color_scale_info=color_scale_info
+                                            )
         for tr in edge_traces:
             fig.add_trace(tr)
 
@@ -398,22 +424,21 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         self.fig = fig
         return fig
 
-    def update_figure( self,
+    def update_figure(self,
         C: np.ndarray,
         labels, 
         directed: bool,
-        colorscale: str,
         update_type:UpdateType,
+        color_scale_info,
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
     ) -> go.Figure:
-        
+        scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
+
         fig = self.fig
         if fig is None:
             # safety: fall back to full build if cache is missing
-            return self.build_figure(C=C, labels=labels, directed=directed, colorscale=colorscale)
-        
-        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C)
+            return self.build_figure(C=C, labels=labels, directed=directed, color_scale_info=color_scale_info)
 
         with fig.batch_update():
 
@@ -439,7 +464,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                     continue
 
                 ### GET COLOR
-                color = helpers._get_edge_color(edge=w, data_max=data_max, data_min=data_min)
+                color = helpers._get_edge_color(edge_weight=w, zmin=zmin, zmax=zmax, colorscale=colorscale, default_neg_color=self.default_neg_color, default_pos_color=self.default_pos_color)
 
                 ### GET WIDTH
                 width = helpers._get_edge_width(edge=w, scale=scale, min_width=self.edge_size_min, max_width=self.edge_size_max)
@@ -457,7 +482,6 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
     def __init__(
         self,
         chanlocs,
-        show_labels:bool =True,
         node_size: float = 10.0,
         edge_size_min: float = 0.4,
         edge_size_max: float = 4.0,
@@ -465,25 +489,32 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         default_neg_color: str = "blue",
         node_fill: str = "lightgreen",
         node_edge: str = "black",
-        # need more settings
+        arc_radius: float= 1.0,
+        n_arc_points: int=4,
+        show_hemi_left: bool=True,
+        show_hemi_right: bool=True,
     ) -> None:
-        self.show_labels = show_labels
-        super().__init__(chanlocs=chanlocs, 
-                         show_labels=show_labels, 
+        ConnectivityView.__init__(self,default_pos_color=default_pos_color,
+            default_neg_color=default_neg_color,)
+        HandlesNodes.__init__(self,
+                              chanlocs=chanlocs, 
                          node_size=node_size, 
                          edge_size_max=edge_size_max, 
                          edge_size_min=edge_size_min,
-                         default_pos_color=default_pos_color,
-                         default_neg_color=default_neg_color, 
                          node_fill=node_fill,
-                         node_edge=node_edge)
+                         node_edge=node_edge,
+                         arc_radius=arc_radius)
+
+        self.n_arc_points = n_arc_points
+        self.show_hemi_left = show_hemi_left
+        self.show_hemi_right = show_hemi_right
        
-    def update_locs(chanlocs):
+    def update_locs(self, chanlocs):
            # Parse → sx, sy, sz, labels
         sx, sy, sz, labs = helpers.parse_channel_locs(chanlocs)
 
         # 2D normalized topography
-        return helpers.compute_locs_3d(sx=sx, sy=sy, sz=sz)
+        self.locs = helpers.compute_locs_3d(sx=sx, sy=sy, sz=sz)
 
     ### NEED TO FIX INPUTS
     def _get_edge_path(
@@ -491,7 +522,6 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         i: int,
         j: int,
         C: np.ndarray,
-        arc_radius: Optional[float] = None,
         m: int = 60
     ) -> np.ndarray:
         p0 = self.locs[i]
@@ -506,7 +536,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
 
         d = chord / L
 
-        # curvature direction: choose a perpendicular vector
+        # arc_radius direction: choose a perpendicular vector
         perp = np.cross(d, np.array([0.0, 0.0, 1.0]))
         if np.linalg.norm(perp) < 1e-6:
             perp = np.cross(d, np.array([0.0, 1.0, 0.0]))
@@ -519,10 +549,10 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
             sign = 1 if i < j else -1
 
         # arc amplitude
-        if arc_radius is None:
-            arc_height = 0.15 * L      # automatic light curvature
+        if self.arc_radius is None:
+            arc_height = 0.15 * L      # automatic light arc_radius
         else:
-            arc_height = float(arc_radius)
+            arc_height = float(self.arc_radius)
 
         # parametric t in [0,1]
         t = np.linspace(0.0, 1.0, m)
@@ -531,7 +561,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         base = p0[None, :] + np.outer(t, chord)
         hump = arc_height * np.sin(np.pi * t)
 
-        # primary curvature (adds elevation)
+        # primary arc_radius (adds elevation)
         P = base + np.outer(hump, perp)
 
         # if bidirectional, offset each arc sideways
@@ -543,7 +573,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         return P
 
 
-    def _build_base_traces(self, brain_mesh: Optional[pv.PolyData]) -> List[go.Scattergl]:
+    def _build_base_traces(self, brain_mesh: Optional[pv.PolyData], labels) -> List[go.Scattergl]:
         if brain_mesh is not None and pv is not None and brain_mesh.n_points > 0:
             pts = np.asarray(brain_mesh.points)
             faces_np = np.asarray(brain_mesh.faces)
@@ -559,8 +589,8 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         x, y, z = self.xyz[:, 0], self.xyz[:, 1], self.xyz[:, 2]
         nodes = go.Scatter3d(
             x=x, y=y, z=z,
-            mode="markers+text" if self.show_labels else "markers",
-            text=self.labels if self.show_labels else None,
+            mode="markers+text",
+            text=labels,
             textposition="top center",
             textfont=dict(size=10, color="black"),
             marker=dict(size=self.node_size_3d),
@@ -568,7 +598,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         )
         return [head, nodes]
     
-    def _make_edge_trace(self, P, color, width, i, j, w):
+    def _make_edge_trace(self, P, color, width, i, j, w, labels):
         return go.Scattergl(
             x=P[:, 0], y=P[:, 1],
             mode="lines",
@@ -576,8 +606,8 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
             opacity=0.75,
             showlegend=False,
             hoverinfo="text",
-            text=f"{self.labels[i]} → {self.labels[j]}<br>Weight: {w:.3f}",
-            name=f"{self.labels[i]},{self.labels[j]}",
+            text=f"{labels[i]} → {labels[j]}<br>Weight: {w:.3f}",
+            name=f"{labels[i]},{labels[j]}",
         )
     
     def _collect_arrow(self, P, w):
@@ -618,9 +648,9 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         C: np.ndarray,
         directed: bool,
         labels,
-        curvature: float,
+        color_scale_info
     ) -> List[go.Scattergl]:
-        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C)
+        scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         # set up these traces
         edge_traces: List[go.Scattergl] = []
         n_nodes = C.shape[0]
@@ -632,13 +662,13 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
 
             ### GET EDGE COLOR (MAYBE FUNCTION??)
             # Normalize weight to signed [data_min, data_max] then to [0,1]
-            color = helpers._get_edge_color(edge_weight=w, data_max=data_max, data_min=data_min)
+            color = helpers._get_edge_color(edge_weight=w, zmin=zmin, zmax=zmax, colorscale=colorscale, default_neg_color=self.default_neg_color, default_pos_color=self.default_pos_color)
 
             ### GET EDGE WIDTH 
             width = helpers._get_edge_width(edge_weight=w, scale=scale, min_width=self.edge_size_min, max_width=self.edge_size_max)
 
             ### GET EDGE PATH
-            P = self._get_edge_path(i, j, use_arcs=directed, curvature=curvature)
+            P = self._get_edge_path(i, j, use_arcs=directed)
 
             ### ADD TO EDGE TRACE LIST. CREATES EDGE
             edge_traces.append(
@@ -670,63 +700,23 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                     )
                 )
 
-        return edge_traces, (zmin, zmax)
-    
-    # edge_traces = []
-    #     arrow_positions = []
-    #     arrow_vectors   = []
-    #     arrow_vals      = []
-    #     arrow_sizes     = []
-
-    #     for i, j in self.get_ij_iter(brain_data.n_nodes, brain_data.directed):
-    #         w = float(C[i, j])
-
-    #         color = self._get_edge_color(edge=w, data_min=data_min, data_max=data_max)
-    #         width = self._get_edge_width(edge=w, scale=scale,
-    #                                      min_width=self.min_width,
-    #                                      max_width=self.max_width)
-
-    #         # polymorphic!
-    #         P = self.get_edge_path(i, j)
-
-    #         # polymorphic!
-    #         trace = self.make_edge_trace(P, color, width, i, j, w)
-    #         edge_traces.append(trace)
-
-    #         if brain_data.directed:
-    #             pos_vec = self.collect_arrow(P, w)
-    #             if pos_vec is not None:
-    #                 pos, vec = pos_vec
-    #                 arrow_positions.append(pos)
-    #                 arrow_vectors.append(vec)
-    #                 arrow_vals.append(w)
-
-    #                 adj = self._normalize_weight(w, data_min, data_max)
-    #                 arrow_sizes.append(max(0.6, 0.6 * adj))
-
-    #     arrow_trace = None
-    #     if brain_data.directed:
-    #         arrow_trace = self.build_arrowhead_trace(
-    #             arrow_positions, arrow_vectors, arrow_vals, arrow_sizes, zmin, zmax
-    #         )
-
-    #     return edge_traces, arrow_trace, (zmin, zmax)
-
+        return edge_traces
     
     def build_figure(
         self,
         C: np.ndarray,
-        labels, 
+        labels,
         directed: bool,
-        colorscale: str,
+        color_scale_info,
     ) -> go.Figure:
+        scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
         fig = go.Figure()
         for tr in self._build_base_traces():
             fig.add_trace(tr)
 
         ### CREATE EDGES
-        edge_traces, (zmin, zmax) = self._build_edge_traces(C=C, 
+        edge_traces = self._build_edge_traces(C=C, 
             directed=directed,
         )
         for tr in edge_traces:
@@ -756,23 +746,22 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
 
         return fig
 
-    def update_figure( self,
+    def update_figure(self,
         C: np.ndarray,
         labels, 
         directed: bool,
-        colorscale: str,
         update_type:UpdateType,
+        color_scale_info,
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
     ) -> go.Figure:
+        scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         
         fig = self.fig
         if fig is None:
             # safety: fall back to full build if cache is missing
             return self.build_figure(C=C, labels=labels, directed=directed, colorscale=colorscale)
         
-        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C)
-
         with fig.batch_update():
 
             traces_list = helpers._get_candidate_edges(old_thresh_mask=old_thresh_mask, new_thresh_mask=new_thresh_mask, update_type=update_type, directed=directed, n_nodes=C.shape[0])
@@ -797,7 +786,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                     continue
 
                 ### GET COLOR
-                color = helpers._get_edge_color(edge=w, data_max=data_max, data_min=data_min)
+                color = helpers._get_edge_color(edge_weight=w, zmin=zmin, zmax=zmax, colorscale=colorscale, default_neg_color=self.default_neg_color, default_pos_color=self.default_pos_color)
 
                 ### GET WIDTH
                 width = helpers._get_edge_width(edge=w, scale=scale, min_width=self.edge_size_min, max_width=self.edge_size_max)
@@ -808,3 +797,11 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
             # UPDATE COLOR BAR (MAKE THIS FUNCTION)
             helpers._update_colorbar(fig, self._colorbar_trace_idx, colorscale, zmin, zmax)
         return fig
+
+    def update_attributes(self, viz_updates):
+        self.node_size = viz_updates["node_size_3d"]
+        self.edge_size_min = viz_updates["edge_min_3d"]
+        self.edge_size_max = viz_updates["edge_max_3d"]
+        self.n_arc_points = viz_updates["arc_points_3d"]
+        self.show_hemi_left = viz_updates["show_hemi_left_3d"]
+        self.show_hemi_right = viz_updates["show_hemi_right_3d"]

@@ -1,6 +1,6 @@
 from data.simulation import Simulation
 import dash_bootstrap_components as dbc
-from visualization.brainvisualizer import ConnectivityVisualizer
+from visualization.vizuimanager import VizUIManager
 from dash import Dash
 import pandas as pd
 from utils.braindata import BrainData
@@ -30,7 +30,7 @@ class GlobalAppState:
         self.brain_data = BrainData(data.conn_matrices, chanlocs, brain_mesh)
         # print( self.brain_data)
         self.threshold = Threshold()
-        self.viz = ConnectivityVisualizer(self.brain_data, self.threshold)
+        self.viz = VizUIManager(self.brain_data, self.threshold)
         print("instantiated")
         # print(self.viz)
         

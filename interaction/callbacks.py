@@ -3,9 +3,11 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.colors as plc
 from data.loaders import DataLoader, PRESET_CONFIGS  # adjust import path if needed
+import visualization.vizhelpers as helpers
 
 
-from visualization.brainvisualizer import ConnectivityVisualizer, UpdateType
+from visualization.vizuimanager import VizType, VizUIManager
+from visualization.vizhelpers import UpdateType
 from utils.global_app_state import GlobalAppState
 from utils.update import update_attributes
 from analysis.threshold import Threshold
@@ -22,7 +24,7 @@ PRESET_CONFIGS = {
 }
 
 def determine_update_type(
-            viz,
+            viz_manager: VizUIManager,
             threshold: Threshold,
             updates: dict
         ) -> UpdateType:
@@ -32,13 +34,12 @@ def determine_update_type(
             - threshold: Threshold instance
             - updates: dict with new UI parameters
             """
-
             # ---------------------------------------------------------
             # 1. Check visualization-related changes → FULL UPDATE
             # ---------------------------------------------------------
             color_fields = ["colorscale", "color_min", "color_max"]
             for field in color_fields:
-                if getattr(viz, field) != updates[field]:
+                if getattr(viz_manager, field) != updates[field]:
                     return UpdateType.COLOR
 
             # ---------------------------------------------------------
@@ -52,7 +53,7 @@ def determine_update_type(
                     return UpdateType.THRESHOLD
 
             # Also include conn_idx in threshold update logic:
-            if viz.conn_idx != updates["conn_idx"]:
+            if viz_manager.conn_idx != updates["conn_idx"]:
                 return UpdateType.THRESHOLD
 
             # ---------------------------------------------------------
@@ -83,21 +84,21 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
 
         # 3D visualization options
         Input("main-node-size-3d", "value"),
-        Input("main-edge-min-3d", "value"),
+        Input("main-edge-x-3d", "value"),
         Input("main-edge-max-3d", "value"),
         Input("main-arc-points-3d", "value"),
         Input("main-show-left-3d", "value"),
         Input("main-show-right-3d", "value"),
         prevent_initial_call=False,
     )
-    def update_visualization(idx, thresh_type, thresh_value, viz_type, color_name, conn_range, alpha, node_size_2d, edge_min_2d, edge_max_2d, node_size_3d, edge_min_3d, edge_max_3d, arc_points_3d, show_hemi_right_3d, show_hemi_left_3d):
+    def update_visualization(idx, thresh_type, thresh_value, viz_type_str, color_name, conn_range, alpha, node_size_2d, edge_min_2d, edge_max_2d, node_size_3d, edge_min_3d, edge_max_3d, n_arc_points_3d, show_hemi_right_3d, show_hemi_left_3d):
 
         """Update the main visualization figure.
 
         The signature must match the decorated Inputs exactly.
         """
         idx = int(np.clip(idx or 0, 0, n_frames - 1))
-        viz_type = (viz_type or "2D")
+        viz_type = helpers.str_to_viz_type(viz_type_str)
 
         # conn_range is expected to be a two-element sequence [min, max]
         try:
@@ -123,7 +124,7 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             "node_size_3d": node_size_3d,
             "edge_min_3d": edge_min_3d,
             "edge_max_3d": edge_max_3d,
-            "arc_points_3d": arc_points_3d,
+            "n_arc_points_3d": n_arc_points_3d,
 
             "show_hemi_left_3d": show_hemi_left_3d,
             "show_hemi_right_3d": show_hemi_right_3d,
@@ -148,7 +149,8 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         # Run the visualization update
         # -----------------------------
         update_attributes(global_state.threshold, **threshold_updates)
-        global_state.viz.update(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type, viz_updates=viz_updates)
+        global_state.viz.update_attributes(viz_updates=viz_updates)
+        global_state.viz.update_figure(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type)
         fig = global_state.viz.get_figure()
         fig.update_layout(uirevision="keep")
         return fig

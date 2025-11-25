@@ -361,7 +361,7 @@ def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
                             ),
                             dbc.Col(
                                 [
-                                    dbc.Label("Directed?"),
+                                    dbc.Label("Directed? "),
                                     dbc.Checkbox(
                                         id=f"{id_prefix}-gen-directed",
                                         value=False,

@@ -136,19 +136,29 @@ def _color_from_scale(name: str, t: float) -> str:
 def _get_edge_width(edge_weight:float, scale: float, min_width:float, max_width:float)->float:
     return min_width + (abs(edge_weight) / max(scale, 1e-12)) * (max_width - min_width)
 
-def _get_edge_color(edge_weight:float, data_min:float, data_max:float, color_min:float, color_max: float, colorscale: str, default_pos_color, default_neg_color):
-    t_global = (edge_weight - data_min) / max((data_max - data_min), 1e-12)
-    try:
-        adj = (t_global - color_min) / max((color_max - color_min), 1e-12)
-    except Exception:
-        adj = t_global
+def _get_edge_color(
+    edge_weight: float,
+    zmin: float,
+    zmax: float,
+    colorscale: str,
+    default_pos_color: str,
+    default_neg_color: str,
+):
+    """
+    Map edge_weight to a color using a precomputed color range [zmin, zmax].
+    zmin/zmax already reflect color_min/color_max cropping.
+    """
+    # Normalize weight into [0, 1] based on the visible color range
+    denom = max((zmax - zmin), 1e-12)
+    adj = (edge_weight - zmin) / denom
     adj = float(np.clip(adj, 0.0, 1.0))
 
     try:
         return _color_from_scale(colorscale, adj)
     except Exception:
         base_color = default_pos_color if edge_weight >= 0 else default_neg_color
-        return _rgba_from_color(base_color, max(0.12, 0.25 + 0.75 * adj))
+        alpha = max(0.12, 0.25 + 0.75 * adj)
+        return _rgba_from_color(base_color, alpha)
 
 def _quad_bezier(p0: np.ndarray, p1: np.ndarray, curvature: float = 0.25, m: int = 40) -> np.ndarray:
     d = p1 - p0
@@ -442,3 +452,23 @@ def _get_candidate_edges(edge_trace_idx, old_thresh_mask, new_thresh_mask, updat
 
         print(f"Number edges: {len(changed_edges)}")
         return changed_edges
+
+VIZ_STR_TO_ENUM = {
+    "2d": VizType.FIG2D,
+    "3d": VizType.FIG3D,
+    "heatmap": VizType.FIGHEATMAP,
+}
+
+VIZ_ENUM_TO_STR = {v: k.capitalize() for k, v in VIZ_STR_TO_ENUM.items()}
+
+def str_to_viz_type(s: str) -> VizType:
+    try:
+        return VIZ_STR_TO_ENUM[s.strip().lower()]
+    except KeyError:
+        raise ValueError(f"Invalid viz type string: {s}")
+
+def viz_type_to_str(viz: VizType) -> str:
+    try:
+        return VIZ_ENUM_TO_STR[viz]
+    except KeyError:
+        raise ValueError(f"Invalid VizType: {viz}")
