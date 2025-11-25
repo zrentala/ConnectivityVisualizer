@@ -16,7 +16,7 @@ from utils.braindata import BrainData
 from analysis.threshold import Threshold
 from itertools import product
 import visualization.vizhelpers as helpers
-from visualization.vizhelpers import VizType, UpdateType
+from visualization.vizhelpers import VizType, UpdateType, Channel
 
 class ConnectivityView(ABC):
 
@@ -253,6 +253,7 @@ class ConnectivityViewNode(ConnectivityView):
                     arrow_sizes.append(max(0.6, 0.6 * adj))
 
         arrow_trace = None
+        ### ONLY 3D
         if directed:
             arrow_trace = self._build_arrowhead_trace(
                 arrow_positions, arrow_vectors, arrow_vals, arrow_sizes, zmin, zmax
@@ -387,9 +388,6 @@ class ConnectivityView2D(ConnectivityViewNode):
            # Parse → sx, sy, sz, labels
         sx, sy, sz, labs = helpers.parse_channel_locs(chanlocs)
 
-        # update internal state
-        n = len(sx)
-
         # 2D normalized topography
         return helpers.compute_xy_topo(sx, sy)
 
@@ -444,6 +442,268 @@ class ConnectivityView2D(ConnectivityViewNode):
         else:
             P = np.vstack([p0, p1])
         return P
+    
+    def _make_edge_trace(self, P, color, width, i, j, w):
+        return go.Scattergl(
+            x=P[:, 0], y=P[:, 1],
+            mode="lines",
+            line=dict(color=color, width=width),
+            opacity=0.75,
+            showlegend=False,
+            hoverinfo="text",
+            text=f"{self.labels[i]} → {self.labels[j]}<br>Weight: {w:.3f}",
+            name=f"{self.labels[i]},{self.labels[j]}",
+        )
+    
+    def _collect_arrow(self, P, w):
+        if len(P) < 2: 
+            return None
+        q0, q1 = P[-2], P[-1]
+        pos = q1 - 0.05 * (q1 - q0)
+        vec = q1 - q0
+        L = np.linalg.norm(vec)
+        if L < 1e-9:
+            return None
+        return (pos, vec / L)
+
+    def _build_arrowhead_trace(self, pos_list, vec_list, vals, sizes, zmin, zmax):
+        # 2D arrows can use Scattergl with arrow markers
+        return None  # or implement later
+
+    def _build_edge_traces(
+        self,
+        C: np.ndarray,
+        directed: bool,
+        labels,
+        curvature: float,
+    ) -> List[go.Scattergl]:
+        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C)
+        # set up these traces
+        edge_traces: List[go.Scattergl] = []
+        n_nodes = C.shape[0]
+        #  LOOP OVER ALL POSSIBLE TRACES TO CREATE ALL EDGES
+        ij_iter = helpers._get_ij_iter(n_nodes, directed) 
+        for i, j in ij_iter:
+            # get connection value
+            w = C[i, j]
+
+            ### GET EDGE COLOR (MAYBE FUNCTION??)
+            # Normalize weight to signed [data_min, data_max] then to [0,1]
+            color = helpers._get_edge_color(edge_weight=w, data_max=data_max, data_min=data_min)
+
+            ### GET EDGE WIDTH 
+            width = helpers._get_edge_width(edge_weight=w, scale=scale, min_width=self.edge_size_min, max_width=self.edge_size_max)
+
+            ### GET EDGE PATH
+            P = self._get_edge_path(i, j, use_arcs=directed, curvature=curvature)
+
+            ### ADD TO EDGE TRACE LIST. CREATES EDGE
+            edge_traces.append(
+                go.Scattergl(
+                    x=P[:, 0],
+                    y=P[:, 1],
+                    mode="lines",
+                    line=dict(color=color, width=width),
+                    opacity=0.75,
+                    showlegend=False,
+                    hoverinfo="text",
+                    text=f"{labels[i]} → {labels[j]}<br>Weight: {w:.3f}",
+                    name=f"{labels[i]},{labels[j]}",
+                )
+            )
+
+            ### ADDS ARROWS IF DIRECTED
+            if directed and len(P) >= 2:
+                q0, q1 = P[-2], P[-1]
+                edge_traces.append(
+                    go.Scattergl(
+                        x=[q0[0], q1[0]],
+                        y=[q0[1], q1[1]],
+                        mode="lines",
+                        line=dict(color=color, width=width / 2),
+                        opacity=0.0,  
+                        showlegend=False,
+                        hoverinfo="skip",
+                    )
+                )
+
+        return edge_traces, (zmin, zmax)
+
+
+class ConnectivityView3D(ConnectivityViewNode):
+    def __init__(
+        self,
+        chanlocs,
+        show_labels:bool =True,
+        node_size: float = 10.0,
+        edge_size_min: float = 0.4,
+        edge_size_max: float = 4.0,
+        default_pos_color: str = "red",
+        default_neg_color: str = "blue",
+        node_fill: str = "lightgreen",
+        node_edge: str = "black",
+        # need more settings
+    ) -> None:
+        self.show_labels = show_labels
+        super().__init__(chanlocs=chanlocs, 
+                         show_labels=show_labels, 
+                         node_size=node_size, 
+                         edge_size_max=edge_size_max, 
+                         edge_size_min=edge_size_min,
+                         default_pos_color=default_pos_color,
+                         default_neg_color=default_neg_color, 
+                         node_fill=node_fill,
+                         node_edge=node_edge)
+       
+    def update_locs(chanlocs):
+           # Parse → sx, sy, sz, labels
+        sx, sy, sz, labs = helpers.parse_channel_locs(chanlocs)
+
+        # 2D normalized topography
+        return helpers.compute_locs_3d(sx=sx, sy=sy, sz=sz)
+
+    ### NEED TO FIX INPUTS
+    def _get_edge_path(
+        self,
+        i: int,
+        j: int,
+        C: np.ndarray,
+        data_min: float,
+        data_max: float,
+        arc_radius: Optional[float] = None,
+        m: int = 60
+    ) -> np.ndarray:
+        """
+        Builds a smooth 3D arc (with optional offset for bidirectional edges).
+        Returns P as an (m, 3) NumPy array.
+        """
+
+        p0 = self.locs[i]
+        p1 = self.locs[j]
+
+        # chord vector and length
+        chord = p1 - p0
+        L = np.linalg.norm(chord)
+
+        if L < 1e-12:
+            return np.vstack([p0, p1])   # fallback straight segment
+
+        d = chord / L
+
+        # curvature direction: choose a perpendicular vector
+        perp = np.cross(d, np.array([0.0, 0.0, 1.0]))
+        if np.linalg.norm(perp) < 1e-6:
+            perp = np.cross(d, np.array([0.0, 1.0, 0.0]))
+        perp = perp / (np.linalg.norm(perp) + 1e-12)
+
+        # detect bidirectional edges to offset arcs
+        reverse_exists = (np.isfinite(C[j, i]) and abs(C[j, i]) > 1e-12)
+        sign = 0
+        if reverse_exists:
+            sign = 1 if i < j else -1
+
+        # arc amplitude
+        if arc_radius is None:
+            arc_height = 0.15 * L      # automatic light curvature
+        else:
+            arc_height = float(arc_radius)
+
+        # parametric t in [0,1]
+        t = np.linspace(0.0, 1.0, m)
+
+        # central arc (quadratic "hump")
+        base = p0[None, :] + np.outer(t, chord)
+        hump = arc_height * np.sin(np.pi * t)
+
+        # primary curvature (adds elevation)
+        P = base + np.outer(hump, perp)
+
+        # if bidirectional, offset each arc sideways
+        if sign != 0:
+            env = np.sin(np.pi * t)
+            offset_amt = 0.06 * L * sign
+            P += np.outer(env * offset_amt, perp)
+
+        return P
+
+
+    def _build_base_traces(self) -> List[go.Scattergl]:
+            """Head outline, nose, and node markers (no edges)."""
+            theta = np.linspace(0, 2 * np.pi, 256)
+            x, y = self.xy_topo[:, 0], self.xy_topo[:, 1]
+
+            head = go.Scattergl(
+                x=np.cos(theta),
+                y=np.sin(theta),
+                mode="lines",
+                line=dict(color="black", width=2),
+                hoverinfo="skip",
+                name="Head",
+            )
+
+            nose = go.Scattergl(
+                x=[0.10, 0.00, -0.10],
+                y=[1.00, 1.10, 1.00],
+                mode="lines",
+                line=dict(color="black", width=2),
+                name="Nose",
+                hoverinfo="skip",
+                showlegend=False,
+            )
+
+            nodes = go.Scattergl(
+                x=x,
+                y=y,
+                mode="markers+text" if self.show_labels else "markers",
+                text=self.labels if self.show_labels else None,
+                textposition="middle center",
+                marker=dict(
+                    size=self.node_size_2d,
+                    color=self.node_fill,
+                    line=dict(color=self.node_edge, width=2),
+                ),
+                hovertext=self.labels,
+                hoverinfo="text",
+                name="Electrodes",
+            )
+
+            return [head, nose, nodes]
+    
+    def _get_edge_path(self, i: int, j: int, use_arcs: bool, curvature: float) -> np.ndarray:
+        p0 = self.locs[i]
+        p1 = self.locs[j]
+        if use_arcs:
+            P = helpers._quad_bezier(p0, p1, curvature, m=60)
+        else:
+            P = np.vstack([p0, p1])
+        return P
+    
+    def _make_edge_trace(self, P, color, width, i, j, w):
+        return go.Scattergl(
+            x=P[:, 0], y=P[:, 1],
+            mode="lines",
+            line=dict(color=color, width=width),
+            opacity=0.75,
+            showlegend=False,
+            hoverinfo="text",
+            text=f"{self.labels[i]} → {self.labels[j]}<br>Weight: {w:.3f}",
+            name=f"{self.labels[i]},{self.labels[j]}",
+        )
+    
+    def _collect_arrow(self, P, w):
+        if len(P) < 2: 
+            return None
+        q0, q1 = P[-2], P[-1]
+        pos = q1 - 0.05 * (q1 - q0)
+        vec = q1 - q0
+        L = np.linalg.norm(vec)
+        if L < 1e-9:
+            return None
+        return (pos, vec / L)
+
+    def _build_arrowhead_trace(self, pos_list, vec_list, vals, sizes, zmin, zmax):
+        # 2D arrows can use Scattergl with arrow markers
+        return None  # or implement later
 
     def _build_edge_traces(
         self,
