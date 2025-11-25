@@ -226,7 +226,6 @@ class ConnectivityVisualizer:
         self._edge3d_trace_idx = {}
         self._colorbar_trace_idx_2d = -999
         self._colorbar_trace_idx_3d = -999
-        self._base_2d_traces: Optional[List[go.Scattergl]] = None
         self.fig_2d_cache = None
         self.fig_3d_cache = None
         self.fig_heatmap_cache = None

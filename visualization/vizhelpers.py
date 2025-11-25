@@ -150,21 +150,21 @@ def _color_from_scale(name: str, t: float) -> str:
     b = int(round((1 - frac) * c0[2] + frac * c1[2]))
     return f"rgb({r},{g},{b})"
 
-def _get_edge_width(edge:float, scale: float, min_width:float, max_width:float)->float:
-    return min_width + (abs(edge) / max(scale, 1e-12)) * (max_width - min_width)
+def _get_edge_width(edge_weight:float, scale: float, min_width:float, max_width:float)->float:
+    return min_width + (abs(edge_weight) / max(scale, 1e-12)) * (max_width - min_width)
 
-def _get_edge_color(self, edge:float, data_min:float, data_max:float):
-    t_global = (edge - data_min) / max((data_max - data_min), 1e-12)
+def _get_edge_color(edge_weight:float, data_min:float, data_max:float, color_min:float, color_max: float, colorscale: str, default_pos_color, default_neg_color):
+    t_global = (edge_weight - data_min) / max((data_max - data_min), 1e-12)
     try:
-        adj = (t_global - self.color_min) / max((self.color_max - self.color_min), 1e-12)
+        adj = (t_global - color_min) / max((color_max - color_min), 1e-12)
     except Exception:
         adj = t_global
     adj = float(np.clip(adj, 0.0, 1.0))
 
     try:
-        return _color_from_scale(self.colorscale, adj)
+        return _color_from_scale(colorscale, adj)
     except Exception:
-        base_color = self.default_pos_color if edge >= 0 else self.default_neg_color
+        base_color = default_pos_color if edge_weight >= 0 else default_neg_color
         return _rgba_from_color(base_color, max(0.12, 0.25 + 0.75 * adj))
 
 def _quad_bezier(p0: np.ndarray, p1: np.ndarray, curvature: float = 0.25, m: int = 40) -> np.ndarray:
@@ -283,11 +283,11 @@ def _update_edge_trace(trace, edge_weight, color, width, opacity, label1, label2
     trace.hoverinfo = "text"
     trace.text = f"{label1} → {label2}<br>Weight: {edge_weight:.3f}"
 
-def _get_mat_at_idx(self, brain_data: BrainData) -> np.ndarray:
-        C = brain_data.conn_mat[self.conn_idx, :, : ].copy()
+def _get_mat_at_idx(conn_mat: np.ndarray, idx: int) -> np.ndarray:
+        C = conn_mat[idx, :, : ].copy()
         return C
 
-def _get_scale_and_range(self, C: np.ndarray):
+def _get_scale_and_range(C: np.ndarray, color_min: float, color_max: float):
         """
         Compute:
         - scale       : max abs connection (excluding diagonal)
@@ -312,8 +312,8 @@ def _get_scale_and_range(self, C: np.ndarray):
         data_max = 0.0 if np.nanmax(C) < 0 else  1.0
 
         # ---- COLOR RANGE ----
-        cmin = float(np.clip(self.color_min, 0.0, 1.0))
-        cmax = float(np.clip(self.color_max, 0.0, 1.0))
+        cmin = float(np.clip(color_min, 0.0, 1.0))
+        cmax = float(np.clip(color_max, 0.0, 1.0))
 
         zmin = data_min + cmin * (data_max - data_min)
         zmax = data_min + cmax * (data_max - data_min)
@@ -324,49 +324,8 @@ def _get_scale_and_range(self, C: np.ndarray):
 
         return scale, data_min, data_max, zmin, zmax
 
-### THIS ONLY WORKS FOR 2D not 3D
-def _get_candidate_edges(self, old_mask, new_mask, update_type, brain_data: BrainData):
-    n = brain_data.n_nodes
-    directed = brain_data.directed
-
-    ij_iter = self.get_ij_iter(n, directed)
-
-    # ---- ALL ----
-    if update_type is UpdateType.ALL:
-        changed_edges = [
-            ((i, j), self._edge2d_trace_idx[(i, j)])
-            for (i, j) in ij_iter
-            if (i, j) in self._edge2d_trace_idx
-        ]
-        print(f"Number edges:{len(changed_edges)}")
-        return changed_edges
-
-    # ---- COLOR ----
-    if update_type is UpdateType.COLOR:
-        changed_edges = [
-            ((i, j), self._edge2d_trace_idx[(i, j)])
-            for (i, j) in ij_iter
-            if new_mask[i, j] and (i, j) in self._edge2d_trace_idx
-        ]
-        print(f"Number edges:{len(changed_edges)}")
-        return changed_edges
-
-    # ---- THRESHOLD ----
-    if update_type is UpdateType.THRESHOLD:
-        diff = (old_mask != new_mask)
-        changed_edges = [
-            ((i, j), self._edge2d_trace_idx[(i, j)])
-            for (i, j) in ij_iter
-            if diff[i, j] and (i, j) in self._edge2d_trace_idx
-        ]
-        print(f"Number edges:{len(changed_edges)}")
-        return changed_edges
-
-    return []
-
-
-def get_ij_iter(self, n_nodes: int, is_directed: bool):
-    if is_directed:
+def _get_ij_iter(n_nodes: int, directed: bool):
+    if directed:
         # All ordered pairs except i == j
         return ((i, j) for i, j in product(range(n_nodes), repeat=2) if i != j)
     else:
@@ -374,7 +333,7 @@ def get_ij_iter(self, n_nodes: int, is_directed: bool):
         return ((i, j) for i in range(n_nodes)
                 for j in range(i + 1, n_nodes))
 
-def _create_cache_edges(self, labels, fig):
+def _create_cache_edges(labels, fig):
     label_to_idx = {lab: i for i, lab in enumerate(labels)}
     trace_idx = {}
     for k, tr in enumerate(fig.data):
@@ -393,7 +352,7 @@ def _create_cache_edges(self, labels, fig):
 
     return trace_idx
 
-def _normalize_weight(self, w: float, data_min: float, data_max: float) -> float:
+def _normalize_weight( w: float, data_min: float, data_max: float) -> float:
         """
         Normalize a weight w → [0,1] based on global min/max.
         Handles signed matrices gracefully.
@@ -402,3 +361,70 @@ def _normalize_weight(self, w: float, data_min: float, data_max: float) -> float
         t = (w - data_min) / rng
         return float(np.clip(t, 0.0, 1.0))
     
+def parse_channel_locs(
+    chanlocs: Union[pd.DataFrame, Iterable[Union[Channel, dict, Iterable]]]
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+
+    if isinstance(chanlocs, pd.DataFrame):
+        sx = chanlocs["x"].to_numpy()
+        sy = chanlocs["y"].to_numpy()
+        sz = chanlocs["z"].to_numpy() if "z" in chanlocs.columns else np.zeros_like(sx)
+
+        if "label" in chanlocs.columns:
+            labs = chanlocs["label"].astype(str).to_numpy()
+        else:
+            labs = np.arange(len(sx)).astype(str)
+
+        return sx, sy, sz, labs
+
+    # ---- list / dict / channel objects ----
+    sx, sy, sz, labs = [], [], [], []
+    for row in chanlocs:
+        if isinstance(row, Channel):
+            sx.append(row.x)
+            sy.append(row.y)
+            sz.append(row.z if row.z is not None else 0.0)
+            labs.append(row.label or "")
+
+        elif isinstance(row, dict):
+            sx.append(float(row["x"]))
+            sy.append(float(row["y"]))
+            sz.append(float(row.get("z", 0.0)))
+            labs.append(str(row.get("label", "")))
+
+        else:
+            # generic list-like: [x, y, (z), (label)]
+            x = float(row[0])
+            y = float(row[1])
+            z = float(row[2]) if len(row) >= 3 and np.isscalar(row[2]) else 0.0
+            lab = (
+                str(row[3]) if len(row) >= 4
+                else (str(row[2]) if len(row) >= 3 and not np.isscalar(row[2]) else "")
+            )
+            sx.append(x)
+            sy.append(y)
+            sz.append(z)
+            labs.append(lab)
+
+    sx = np.asarray(sx, dtype=float)
+    sy = np.asarray(sy, dtype=float)
+    sz = np.asarray(sz, dtype=float)
+    labs = np.asarray(labs, dtype=str)
+
+    if labs.size == 0:
+        labs = np.arange(len(sx)).astype(str)
+
+    return sx, sy, sz, labs
+
+def compute_locs_3d(sx: np.ndarray, sy: np.ndarray, sz: np.ndarray) -> np.ndarray:
+    return np.column_stack([sx, sy, sz]).astype(float)
+
+def compute_locs_2d_topo(sx: np.ndarray, sy: np.ndarray) -> np.ndarray:
+    xs = -sx.copy()
+    ys =  sy.copy()
+
+    xs = xs / (np.max(np.abs(xs)) + 1e-12) * 0.9
+    ys = ys / (np.max(np.abs(ys)) + 1e-12) * 0.9
+
+    return np.column_stack([xs, ys])
+
