@@ -26,31 +26,14 @@ class VizType(Enum):
     FIG3D=auto()
     FIGHEATMAP=auto()
 
-
-### MAYBE??
 @dataclass
-class ChannelGeometry:
-    xyz: np.ndarray          # (n, 3)
-    xy_topo: np.ndarray      # (n, 2)
-    labels: np.ndarray       # (n,)
+class Channel:
+    x: float
+    y: float
+    label: Optional[str] = None
+    # z is optional for 3D; if absent, zeros are assumed
+    z: Optional[float] = None
 
-    @classmethod
-    def from_chanlocs(cls, chanlocs: pd.DataFrame) -> "ChannelGeometry":
-        sx = chanlocs["x"].to_numpy()
-        sy = chanlocs["y"].to_numpy()
-        sz = chanlocs["z"].to_numpy() if "z" in chanlocs.columns else np.zeros_like(sx)
-        if "label" in chanlocs.columns:
-            labs = chanlocs["label"].astype(str).to_numpy()
-        else:
-            labs = np.arange(len(sx)).astype(str)
-
-        xyz = np.column_stack([sx, sy, sz]).astype(float)
-
-        xs = -sx / (np.max(np.abs(sx)) + 1e-12) * 0.9
-        ys =  sy / (np.max(np.abs(sy)) + 1e-12) * 0.9
-        xy_topo = np.column_stack([xs, ys])
-
-        return cls(xyz=xyz, xy_topo=xy_topo, labels=labs)
 
 
 def _rgba_from_color(col: str, strength: float) -> str:
