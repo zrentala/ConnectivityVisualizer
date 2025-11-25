@@ -33,14 +33,14 @@ class Threshold:
     # Public: main entry point
     # ------------------------------------------------------------------
 
-    def apply_threshold(self, brain_data: BrainData, idx: int) -> (np.ndarray, np.ndarray):
+    def apply_threshold(self, conn_mat: np.ndarray, idx: int) -> Tuple[np.ndarray, np.ndarray]:
         """
         Given a connectivity matrix C (2D or 3D slice flattened to 2D),
         return a boolean mask with the same shape as C.
 
         For visualization we usually pass a single (n_elec, n_elec) matrix.
         """
-        C = brain_data.conn_mat[idx]
+        C = conn_mat[idx]
         if C.ndim != 2:
             raise ValueError("Threshold.apply_threshold expects a 2D matrix (n_elec, n_elec).")
 
@@ -64,7 +64,7 @@ class Threshold:
 
         elif ttype == "Statistical Test":
             # 'alpha' also given in percent
-            Cs = brain_data.conn_mat
+            Cs = conn_mat
             if Cs.ndim != 3:
                 raise ValueError("Statistical tests require multiple samples (3D array: samples×n×n).")
             norm_alpha = float(self.alpha) / 100.0
