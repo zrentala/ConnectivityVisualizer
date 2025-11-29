@@ -18,9 +18,10 @@ class UpdateType(Enum):
     NONE=auto()
     XYZ=auto()
     THRESHOLD=auto()
-    COLOR=auto()
+    VISIBLE=auto()
     ALL=auto()
     SWITCH_FIG=auto()
+    NODES=auto()
 
 class VizType(Enum):
     FIG2D=auto()
@@ -134,7 +135,9 @@ def _color_from_scale(name: str, t: float) -> str:
     b = int(round((1 - frac) * c0[2] + frac * c1[2]))
     return f"rgb({r},{g},{b})"
 
-def _get_edge_width(edge_weight:float, scale: float, min_width:float, max_width:float)->float:
+def _get_edge_width(edge_weight:float, scale: float, width_range: Tuple[float])->float:
+    min_width = width_range[0]
+    max_width = width_range[1]
     return min_width + (abs(edge_weight) / max(scale, 1e-12)) * (max_width - min_width)
 
 def _get_edge_color(
@@ -277,6 +280,34 @@ def _update_edge_trace(trace, edge_weight, color, width, opacity, label1, label2
     trace.hoverinfo = "text"
     trace.text = f"{label1} → {label2}<br>Weight: {edge_weight:.3f}"
 
+def _update_node_trace_all(
+    trace,
+    labels=None,
+    size=None,
+    color=None,
+    # opacity=None,
+):
+    """
+    Update all nodes in the node trace.
+    """
+    n = len(labels)
+
+    # Update marker arrays directly
+    if size is not None:
+        trace.update(marker=dict(size=[size]*n))
+
+    if color is not None:
+        trace.marker.color = [color] * n
+
+    # if opacity is not None:
+    #     trace.opacity = opacity
+
+    # Update labels
+    if labels is not None:
+        trace.text = labels
+
+
+
 def _get_mat_at_idx(conn_mat: np.ndarray, idx: int) -> np.ndarray:
         C = conn_mat[idx, :, : ].copy()
         return C
@@ -326,6 +357,31 @@ def _get_ij_iter(n_nodes: int, directed: bool):
         # Only undirected upper-triangle pairs, i < j automatically guarantees i != j
         return ((i, j) for i in range(n_nodes)
                 for j in range(i + 1, n_nodes))
+
+def _create_cache_nodes(labels, fig):
+    """
+    Build a lookup table:
+        label -> (trace_index_in_fig, point_index_in_trace)
+
+    Assumes the node trace is the one named 'Electrodes', and that
+    markers/text ordering matches `labels`.
+    """
+    # 1. Find the node trace index in the figure
+    node_trace_idx = None
+    for k, tr in enumerate(fig.data):
+        if getattr(tr, "name", None) == "Electrodes":
+            node_trace_idx = k
+            break
+
+    if node_trace_idx is None:
+        return {}  # No node trace found
+
+    # 2. Map label → (trace_idx, point_idx)
+    trace = fig.data[node_trace_idx]
+    return {
+        lab: (node_trace_idx, i)
+        for i, lab in enumerate(labels)
+    }
 
 def _create_cache_edges(labels, fig):
     label_to_idx = {lab: i for i, lab in enumerate(labels)}
@@ -426,7 +482,7 @@ def _get_candidate_edges(edge_trace_idx, old_thresh_mask, new_thresh_mask, updat
 
         ij_iter = _get_ij_iter(n_nodes=n_nodes, directed=directed)
         changed_edges = []
-        print(f"{update_type=}")
+        # print(f"{update_type=}")
         # ---- ALL ----
         if update_type is UpdateType.ALL:
             changed_edges = [
@@ -436,7 +492,7 @@ def _get_candidate_edges(edge_trace_idx, old_thresh_mask, new_thresh_mask, updat
             ]
 
         # ---- COLOR ----, only get visible edges
-        if update_type is UpdateType.COLOR:
+        if update_type is UpdateType.VISIBLE:
             changed_edges = [
                 ((i, j), edge_trace_idx[(i, j)])
                 for (i, j) in ij_iter

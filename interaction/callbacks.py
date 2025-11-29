@@ -24,42 +24,124 @@ PRESET_CONFIGS = {
 }
 
 def determine_update_type(
-            viz_manager: VizUIManager,
-            threshold: Threshold,
-            updates: dict
-        ) -> UpdateType:
-            """
-            Determine what type of update is required given:
-            - viz: ConnectivityVisualizer instance
-            - threshold: Threshold instance
-            - updates: dict with new UI parameters
-            """
-            # ---------------------------------------------------------
-            # 1. Check visualization-related changes → FULL UPDATE
-            # ---------------------------------------------------------
-            color_fields = ["colorscale", "color_min", "color_max"]
-            for field in color_fields:
-                if getattr(viz_manager, field) != updates[field]:
-                    return UpdateType.COLOR
+        viz_manager: VizUIManager,
+        threshold: Threshold,
+        updates: dict
+    ) -> UpdateType:
 
-            # ---------------------------------------------------------
-            # 2. Check threshold-related changes → THRESHOLD update
-            # ---------------------------------------------------------
-            # threshold fields to compare
-            threshold_fields = ["threshold", "threshold_type", "alpha"]
+    def strip_fig_type_tag(s: str) -> str:
+        return s[:-3] if s.endswith(("_2d", "_3d")) else s
 
-            for field in threshold_fields:
-                if getattr(threshold, field) != updates[field]:
-                    return UpdateType.THRESHOLD
+    def check_fields(fields, objs, update_type):
+        """
+        General field comparison function.
 
-            # Also include conn_idx in threshold update logic:
-            if viz_manager.conn_idx != updates["conn_idx"]:
-                return UpdateType.ALL
+        fields: list of field names (may include _2d/_3d)
+        objs: list of objects to compare against (viz_manager, fig, threshold)
+        update_type: UpdateType to return on mismatch
+        """
+        for field in fields:
+            if field not in updates:
+                continue
 
-            # ---------------------------------------------------------
-            # 3. No update needed
-            # ---------------------------------------------------------
-            return UpdateType.NONE
+            base = strip_fig_type_tag(field)
+            print(f"{base=}")
+            new_value = updates[field]
+
+            for obj in objs:
+                # print(f"{obj}")
+                
+                # exact field first (viz_manager stores UI values this way)
+                if hasattr(obj, field):
+                    old_value = getattr(obj, field)
+                # fallback to base field (figure might store base)
+                elif hasattr(obj, base):
+                    old_value = getattr(obj, base)
+                else:
+                    continue  # skip missing attributes entirely
+
+                if old_value != new_value:
+                    return update_type
+
+        return None
+
+
+    # ---------------------------------------------------------
+    # Objects used for comparison
+    # ---------------------------------------------------------
+    fig = viz_manager.viz_dict[viz_manager.viz_type]
+
+    # ---------------------------------------------------------
+    # 3. Threshold-related updates
+    # ---------------------------------------------------------
+    threshold_fields = ["threshold", "threshold_type", "alpha"]
+
+    result = check_fields(
+        fields=threshold_fields,
+        objs=[threshold],
+        update_type=UpdateType.THRESHOLD
+    )
+    if result:
+        return result
+
+
+    # ---------------------------------------------------------
+    # 1. Visualization-related updates (COLORSCALE + EDGE WIDTHS)
+    # ---------------------------------------------------------
+    color_fields = [
+        "colorscale",
+        "color_min",
+        "color_max",
+        "edge_width_range_2d",
+        "edge_width_range_3d",
+        "edge_opacity_2d",
+        "edge_opacity_3d"
+    ]
+
+    result = check_fields(
+        fields=color_fields,
+        objs=[viz_manager, fig],
+        update_type=UpdateType.VISIBLE
+    )
+    # print("HERE")
+    if result:
+        return result
+
+    # ---------------------------------------------------------
+    # 2. NODE updates (→ NODES update)
+    # ---------------------------------------------------------
+    node_fields = [
+        "node_size_2d",
+        "node_size_3d",
+    ]
+
+    result = check_fields(
+        fields=node_fields,
+        objs=[viz_manager, fig],
+        update_type=UpdateType.NODES
+    )
+    # print(result)
+    if result:
+        print("NODES")
+        return result
+
+    
+    # ---------------------------------------------------------
+    # 4. Other (conn_idx → full ALL update)
+    # ---------------------------------------------------------
+    result = check_fields(
+        fields=["conn_idx"],
+        objs=[viz_manager],
+        update_type=UpdateType.ALL
+    )
+    if result:
+        return result
+
+    # ---------------------------------------------------------
+    # 5. No update
+    # ---------------------------------------------------------
+    return UpdateType.NONE
+
 
 
 def register_visualization_callback(app: Dash, global_state: GlobalAppState):
@@ -81,11 +163,15 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
 
         # 2D visualization options
         Input("viz-2d-node_size-slider", "value"),
+        # Input("viz-2d-node_opacity-slider", "value"),
         Input("viz-2d-edge_width-range_slider", "value"),
+        Input("viz-2d-edge_opacity-slider", "value"),
 
         # 3D visualization options
         Input("viz-3d-node_size-slider", "value"),
+        # Input("viz-3d-node_opacity-slider", "value"),
         Input("viz-3d-edge_width-range_slider", "value"),
+        Input("viz-3d-edge_opacity-slider", "value"),
         Input("viz-3d-n_arc_points-slider", "value"),
 
         Input("viz-3d-show_right_hem-checklist", "value"),
@@ -103,10 +189,14 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
                             color_range,
                                
                              node_size_2d, 
+                            #  node_opacity_2d, 
                              edge_width_range_2d, 
+                             edge_opacity_2d, 
                              
                              node_size_3d, 
+                            #  node_opacity_3d,
                              edge_width_range_3d, 
+                             edge_opacity_3d,
                              n_arc_points_3d, 
 
                              show_hemi_right_3d, 
@@ -137,12 +227,14 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             # "update_xyz": global_state.brain_data.chanlocs,
             "viz_type": viz_type,
             "node_size_2d": node_size_2d,
-            "edge_min_2d": edge_width_range_2d[0],
-            "edge_max_2d": edge_width_range_2d[1],
+            # "node_opacity_2d": node_opacity_2d,
+            "edge_width_range_2d": edge_width_range_2d,
+            "edge_opacity_2d": edge_opacity_2d,
 
             "node_size_3d": node_size_3d,
-            "edge_min_3d": edge_width_range_3d[0],
-            "edge_max_3d": edge_width_range_3d[1],
+            # "node_opacity_3d": node_opacity_3d,
+            "edge_width_range_3d": edge_width_range_3d,
+            "edge_opacity_3d": edge_opacity_3d,
             "n_arc_points_3d": n_arc_points_3d,
 
             "show_hemi_left_3d": show_hemi_left_3d,
@@ -163,12 +255,13 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             global_state.threshold,
             threshold_updates | viz_updates
         )
+        print(f"{update_type=}")
 
         # -----------------------------
         # Run the visualization update
         # -----------------------------
-        switch_fig = global_state.viz.viz_type != viz_updates['viz_type']
-        print(f"{switch_fig=}")
+        # switch_fig = global_state.viz.viz_type != viz_updates['viz_type']
+        # print(f"{switch_fig=}")
         update_attributes(global_state.threshold, **threshold_updates)
         global_state.viz.update_attributes(viz_updates=viz_updates)
         global_state.viz.update_figure(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type)
@@ -528,7 +621,7 @@ def _map_colors_for_name(name: str):
     return {"pos_color": "red", "neg_color": "blue", "node_fill": "lightgreen", "colorscale": "RdBu"}
 
 
-def register_threshold_callback(app: Dash, global_state: GlobalAppState):
+def register_threshold_callback(app: Dash):
     """Show/hide the threshold slider and stat-test container based on selection."""
     @app.callback(
         Output("thresh-slider_container", "style"),
@@ -547,9 +640,28 @@ def register_threshold_callback(app: Dash, global_state: GlobalAppState):
         else:
             return hide, hide
 
+def register_viz_control_callback(app: Dash):
+    """Show/hide the threshold slider and stat-test container based on selection."""
+    @app.callback(
+        Output("viz-2d-container", "style"),
+        Output("viz-3d-container", "style"),
+        Input("viz-fig_type-dropdown", "value"),
+        prevent_initial_call=False,
+    )
+    def toggle_viz_container(fig_type):
+        show = {"display": "block"}
+        hide = {"display": "none"}
+        viz_type = helpers.str_to_viz_type(s=fig_type)
+        if viz_type == VizType.FIG2D:
+            return show, hide
+        elif viz_type == VizType.FIG3D:
+            return hide, show
+        else:
+            return hide, hide
 
 def register_callbacks(app: Dash, global_state: GlobalAppState):
     """Attach all interaction callbacks to the Dash app."""
     register_visualization_callback(app, global_state)
-    register_threshold_callback(app, global_state)
+    register_threshold_callback(app)
     register_data_callbacks(app, global_state)
+    register_viz_control_callback(app)
