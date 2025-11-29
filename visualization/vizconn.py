@@ -66,16 +66,18 @@ class HandlesNodes():
         self,
         chanlocs,
         node_size: float = 10.0,
-        edge_size_min: float = 0.4,
-        edge_size_max: float = 4.0,
+        # node_opacity: float = 0.75,
+        edge_width_range: Tuple[float]=(0.4, 5),
+        edge_opacity: float = 0.75,
         arc_radius: float=1.0,
         
         node_fill: str = "lightgreen",
         node_edge: str = "black",
     ) -> None:
         self.node_size = node_size
-        self.edge_size_min = edge_size_min
-        self.edge_size_max = edge_size_max
+        # self.node_opacity = node_opacity
+        self.edge_width_range = edge_width_range
+        self.edge_opacity = edge_opacity
         self.node_fill = node_fill
         self.node_edge = node_edge
         self.arc_radius = arc_radius
@@ -83,6 +85,7 @@ class HandlesNodes():
         self.update_locs(chanlocs)
 
         # caches
+        self._node_trace_idx = {}
         self._edge_trace_idx = {}
         self._colorbar_trace_idx = -999
 
@@ -219,8 +222,9 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         self,
         chanlocs,
         node_size: float = 10.0,
-        edge_size_min: float = 0.4,
-        edge_size_max: float = 4.0,
+        # node_opacity: float=0.75,
+        edge_width_range: Tuple[float] = (0.4, 5),
+        edge_opacity: float=0.75,
         default_pos_color: str = "red",
         default_neg_color: str = "blue",
         node_fill: str = "lightgreen",
@@ -232,16 +236,19 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             self,
             chanlocs=chanlocs,
             node_size=node_size,
-            edge_size_min=edge_size_min,
-            edge_size_max=edge_size_max,
+            # node_opacity=node_opacity,
+            edge_width_range=edge_width_range,
+            edge_opacity=edge_opacity,
             node_fill=node_fill,
             node_edge=node_edge,
         )
        
     def update_attributes(self, viz_updates):
         self.node_size = viz_updates["node_size_2d"]
-        self.edge_size_min = viz_updates["edge_min_2d"]
-        self.edge_size_max = viz_updates["edge_max_2d"]
+        self.edge_width_range = viz_updates["edge_width_range_2d"]
+        # self.node_opacity = viz_updates["node_opacity_2d"]
+        self.edge_opacity = viz_updates["edge_opacity_2d"]
+        # print(f"{self.node_opacity=}, {self.edge_opacity=}")
         # self.update_locs(viz_updates["chanlocs"])
 
     def update_locs(self, chanlocs):
@@ -287,6 +294,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                     color=self.node_fill,
                     line=dict(color=self.node_edge, width=2),
                 ),
+                # opacity=self.node_opacity,
                 hovertext=labels,
                 hoverinfo="text",
                 name="Electrodes",
@@ -308,7 +316,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             x=P[:, 0], y=P[:, 1],
             mode="lines",
             line=dict(color=color, width=width),
-            opacity=0.75,
+            opacity=self.edge_opacity,
             showlegend=False,
             hoverinfo="text",
             text=f"{labels[i]} → {labels[j]}<br>Weight: {w:.3f}",
@@ -349,7 +357,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             color = helpers._get_edge_color(edge_weight=w, zmin=zmin, zmax=zmax, colorscale=colorscale, default_neg_color=self.default_neg_color, default_pos_color=self.default_pos_color)
 
             ### GET EDGE WIDTH 
-            width = helpers._get_edge_width(edge_weight=w, scale=scale, min_width=self.edge_size_min, max_width=self.edge_size_max)
+            width = helpers._get_edge_width(edge_weight=w, scale=scale, width_range=self.edge_width_range)
 
             ### GET EDGE PATH
             P = self._get_edge_path(i, j, use_arcs=directed)
@@ -397,8 +405,12 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
         fig = go.Figure()
-        for tr in self._build_base_traces(labels=labels):
+        base = self._build_base_traces(labels)
+        # The node trace is always the *last* one in base:
+        nodes_trace = base[-1]
+        for tr in base:
             fig.add_trace(tr)
+        
 
         ### CREATE EDGES
         edge_traces = self._build_edge_traces(C=C, 
@@ -410,8 +422,9 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             fig.add_trace(tr)
 
         ### CACHE EDGES (i, j) --> idx
-        labels = labels
+
         self._edge_trace_idx = helpers._create_cache_edges(labels, fig)
+        self._node_trace_idx = fig.data.index(nodes_trace)
 
         ### CREATE COLOR BAR
         colorbar_trace_idx = helpers._add_colorbar_trace(fig=fig, colorscale=colorscale,zmin=zmin,zmax=zmax, viz_type=VizType.FIG2D)
@@ -457,6 +470,20 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             )
 
         with fig.batch_update():
+            if update_type == UpdateType.NODES:
+
+                node_trace = fig.data[self._node_trace_idx]
+
+                helpers._update_node_trace_all(
+                    trace=node_trace,
+                    labels=labels,
+                    size=self.node_size,
+                    color=self.node_fill,
+                )
+
+                self.fig = fig
+                return fig
+
 
             traces_list = helpers._get_candidate_edges(edge_trace_idx=self._edge_trace_idx, old_thresh_mask=old_thresh_mask, new_thresh_mask=new_thresh_mask, update_type=update_type, directed=directed, n_nodes=C.shape[0])
 
@@ -483,10 +510,10 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                 color = helpers._get_edge_color(edge_weight=w, zmin=zmin, zmax=zmax, colorscale=colorscale, default_neg_color=self.default_neg_color, default_pos_color=self.default_pos_color)
 
                 ### GET WIDTH
-                width = helpers._get_edge_width(edge_weight=w, scale=scale, min_width=self.edge_size_min, max_width=self.edge_size_max)
-
+                width = helpers._get_edge_width(edge_weight=w, scale=scale, width_range=self.edge_width_range)
+                # print(f"{width=}")
                 ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE THIS AN UPDATEABLE VALUE
-                helpers._update_edge_trace(trace, w, color, width, 0.75, labels[i], labels[j])
+                helpers._update_edge_trace(trace=trace, edge_weight=w, color=color, width=width, opacity=self.edge_opacity, label1=labels[i], label2=labels[j])
 
             # UPDATE COLOR BAR (MAKE THIS FUNCTION)
             helpers._update_colorbar(fig, self._colorbar_trace_idx, colorscale, zmin, zmax)
@@ -499,8 +526,9 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         self,
         chanlocs,
         node_size: float = 10.0,
-        edge_size_min: float = 0.4,
-        edge_size_max: float = 4.0,
+        # node_opacity: float=0.75,
+        edge_width_range: Tuple[float] = (0.4, 5),
+        edge_opacity: float=0.75,
         default_pos_color: str = "red",
         default_neg_color: str = "blue",
         node_fill: str = "lightgreen",
@@ -511,15 +539,17 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         show_hemi_right: bool=True,
     ) -> None:
         ConnectivityView.__init__(self,default_pos_color=default_pos_color,
-            default_neg_color=default_neg_color,)
+            default_neg_color=default_neg_color)
         HandlesNodes.__init__(self,
                               chanlocs=chanlocs, 
                          node_size=node_size, 
-                         edge_size_max=edge_size_max, 
-                         edge_size_min=edge_size_min,
+                        #  node_opacity=node_opacity,
+                         edge_width_range=edge_width_range,
+                         edge_opacity=edge_opacity,
                          node_fill=node_fill,
                          node_edge=node_edge,
-                         arc_radius=arc_radius)
+                         arc_radius=arc_radius
+                         )
 
         self.n_arc_points = n_arc_points
         self.show_hemi_left = show_hemi_left
@@ -607,6 +637,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
             x=x, y=y, z=z,
             mode="markers+text",
             text=labels,
+            # opacity=self.node_opacity,
             textposition="top center",
             textfont=dict(size=10, color="black"),
             marker=dict(size=self.node_size),
@@ -619,7 +650,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
             x=P[:, 0], y=P[:, 1],
             mode="lines",
             line=dict(color=color, width=width),
-            opacity=0.75,
+            opacity=self._make_edge_trace,
             showlegend=False,
             hoverinfo="text",
             text=f"{labels[i]} → {labels[j]}<br>Weight: {w:.3f}",
@@ -681,7 +712,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
             color = helpers._get_edge_color(edge_weight=w, zmin=zmin, zmax=zmax, colorscale=colorscale, default_neg_color=self.default_neg_color, default_pos_color=self.default_pos_color)
 
             ### GET EDGE WIDTH 
-            width = helpers._get_edge_width(edge_weight=w, scale=scale, min_width=self.edge_size_min, max_width=self.edge_size_max)
+            width = helpers._get_edge_width(edge_weight=w, scale=scale, width_range=self.edge_width_range)
 
             ### GET EDGE PATH
             P = self._get_edge_path(i, j, C)
@@ -693,7 +724,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                     y=P[:, 1],
                     mode="lines",
                     line=dict(color=color, width=width),
-                    opacity=0.75,
+                    opacity=self.edge_opacity,
                     showlegend=False,
                     hoverinfo="text",
                     text=f"{labels[i]} → {labels[j]}<br>Weight: {w:.3f}",
@@ -729,7 +760,10 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
         fig = go.Figure()
-        for tr in self._build_base_traces(labels=labels, brain_mesh=brain_mesh):
+        base = self._build_base_traces(labels, brain_mesh=brain_mesh)
+        # The node trace is always the *last* one in base:
+        nodes_trace = base[-1]
+        for tr in base:
             fig.add_trace(tr)
 
         ### CREATE EDGES
@@ -740,8 +774,8 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
             fig.add_trace(tr)
 
         ### CACHE EDGES (i, j) --> idx
-        labels = labels
         self._edge_trace_idx = helpers._create_cache_edges(labels, fig)
+        self._node_trace_idx = fig.data.index(nodes_trace)
 
         ### CREATE COLOR BAR
         colorbar_trace_idx = helpers._add_colorbar_trace(fig=fig, colorscale=colorscale,zmin=zmin,zmax=zmax, viz_type=VizType.FIG2D)
@@ -787,7 +821,20 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
             )
 
         with fig.batch_update():
+            if update_type == UpdateType.NODES:
 
+                node_trace = fig.data[self._node_trace_idx]
+
+                helpers._update_node_trace_all(
+                    trace=node_trace,
+                    labels=labels,
+                    size=self.node_size,
+                    color=self.node_fill,
+                    # opacity=self.node_opacity
+                )
+
+                self.fig = fig
+                return fig
             traces_list = helpers._get_candidate_edges(edge_trace_idx=self._edge_trace_idx, old_thresh_mask=old_thresh_mask, new_thresh_mask=new_thresh_mask, update_type=update_type, directed=directed, n_nodes=C.shape[0])
 
             for (i, j), idx in traces_list:
@@ -813,10 +860,10 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                 color = helpers._get_edge_color(edge_weight=w, zmin=zmin, zmax=zmax, colorscale=colorscale, default_neg_color=self.default_neg_color, default_pos_color=self.default_pos_color)
 
                 ### GET WIDTH
-                width = helpers._get_edge_width(edge_weight=w, scale=scale, min_width=self.edge_size_min, max_width=self.edge_size_max)
+                width = helpers._get_edge_width(edge_weight=w, scale=scale, width_range=self.edge_width_range)
 
                 ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE THIS AN UPDATEABLE VALUE
-                helpers._update_edge_trace(trace, w, color, width, 0.75, labels[i], labels[j])
+                helpers._update_edge_trace(trace, w, color, width, self.edge_opacity, labels[i], labels[j])
 
             # UPDATE COLOR BAR (MAKE THIS FUNCTION)
             helpers._update_colorbar(fig, self._colorbar_trace_idx, colorscale, zmin, zmax)
@@ -825,8 +872,9 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
 
     def update_attributes(self, viz_updates):
         self.node_size = viz_updates["node_size_3d"]
-        self.edge_size_min = viz_updates["edge_min_3d"]
-        self.edge_size_max = viz_updates["edge_max_3d"]
+        # self.node_opacity = viz_updates["node_opacity_3d"]
+        self.edge_opacity = viz_updates["edge_opacity_3d"]
+        self.edge_width_range = viz_updates["edge_width_range_3d"]
         self.n_arc_points = viz_updates["n_arc_points_3d"]
         self.show_hemi_left = viz_updates["show_hemi_left_3d"]
         self.show_hemi_right = viz_updates["show_hemi_right_3d"]

@@ -144,24 +144,29 @@ def create_thresh_component() -> html.Div:
 
 
 def create_2d_options() -> html.Div:
-    node_size_slider = create_slider(id="viz-2d-node_size-slider", data_min=1, data_max=11, step=1, label="Node Size")
+    node_size_slider = create_slider(id="viz-2d-node_size-slider", data_min=5, data_max=50, step=1, label="Node Size")
+    node_opacity_slider = create_slider(id="viz-2d-node_opacity-slider", data_min=0, data_max=1, step=0.01, label="Node Opacity (%)")
 
     edge_width_range = create_range_slider(id="viz-2d-edge_width-range_slider", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0], label="Edge Width Size")
-
+    edge_opacity_slider = create_slider(id="viz-2d-edge_opacity-slider", data_min=0, data_max=1, step=0.01, label="Edge Opacity (%)")
     return html.Div(
-        id="viz-2d-contianer",
+        id="viz-2d-container",
         children=[
             html.Hr(),
             html.H5("2D Visualization Options"),
             node_size_slider,
-            edge_width_range
+            # node_opacity_slider,
+            edge_width_range,
+            edge_opacity_slider
         ],
         style={"display": "none"},
     )
 
 def create_3d_options() -> html.Div:
     node_size_slider = create_slider(id="viz-3d-node_size-slider", data_min=1, data_max=11, step=1, label="Node Size")
+    node_opacity_slider = create_slider(id="viz-3d-node_opacity-slider", data_min=0, data_max=1, step=0.01, label="Node Opacity (%)")
 
+    edge_opacity_slider = create_slider(id="viz-3d-edge_opacity-slider", data_min=0, data_max=1, step=0.01, label="Edge Opacity (%)")
     edge_width_range = create_range_slider("viz-3d-edge_width-range_slider", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0],label="Edge Width Size")
 
     arc_points_slider = create_slider(
@@ -201,7 +206,9 @@ def create_3d_options() -> html.Div:
             html.Hr(),
             html.H5("3D Visualization Options"),
             node_size_slider,
+            # node_opacity_slider,
             edge_width_range,
+            edge_opacity_slider,
             arc_points_slider,
             html.Br(),
             hemisphere_row,
@@ -271,7 +278,7 @@ def create_viz_controls(n_mat: int) -> html.Div:
             options_3d,
         ],
         fluid=True,
-        className="p-2",
+        className=container_class,
     )
 
 
