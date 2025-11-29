@@ -54,7 +54,7 @@ def determine_update_type(
 
             # Also include conn_idx in threshold update logic:
             if viz_manager.conn_idx != updates["conn_idx"]:
-                return UpdateType.THRESHOLD
+                return UpdateType.ALL
 
             # ---------------------------------------------------------
             # 3. No update needed
@@ -65,44 +65,63 @@ def determine_update_type(
 def register_visualization_callback(app: Dash, global_state: GlobalAppState):
     n_frames = int(global_state.brain_data.conn_mat.shape[0])
     @app.callback(
-        Output("main-visualization", "figure"),
-        # Data component
-        Input("data-comp-mat-idx", "value"),
+        Output("split-right-fig", "figure"),
+
+        Input("data-conn_idx-slider", "value"),
+
         # threshold type dropdown (Basic / MST / Statistical Test)
-        Input("thresh-comp-type-dropdown", "value"),
+        Input("thresh-thresh_type-dropdown", "value"),
+        Input("thresh-stat-alpha-slider", "value"),
+        Input("thresh-percent-slider", "value"),
+
         # numeric threshold slider (percent)
-        Input("thresh-comp-slider", "value"),
-        Input("viz-type-dropdown", "value"),
-        Input("color-type-dropdown", "value"),
-        Input("conn-range", "value"),
-        # alpha slider inside the statistical-test subcomponent
-        Input("thresh-comp-alpha-slider", "value"),
+        Input("viz-fig_type-dropdown", "value"),
+        Input("viz-color_type-dropdown", "value"),
+        Input("viz-color-range_slider", "value"),
+
         # 2D visualization options
-        Input("main-node-size-2d", "value"),
-        Input("main-edge-min-2s", "value"),
-        Input("main-edge-max-2d", "value"),
+        Input("viz-2d-node_size-slider", "value"),
+        Input("viz-2d-edge_width-range_slider", "value"),
 
         # 3D visualization options
-        Input("main-node-size-3d", "value"),
-        Input("main-edge-x-3d", "value"),
-        Input("main-edge-max-3d", "value"),
-        Input("main-arc-points-3d", "value"),
-        Input("main-show-left-3d", "value"),
-        Input("main-show-right-3d", "value"),
+        Input("viz-3d-node_size-slider", "value"),
+        Input("viz-3d-edge_width-range_slider", "value"),
+        Input("viz-3d-n_arc_points-slider", "value"),
+
+        Input("viz-3d-show_right_hem-checklist", "value"),
+        Input("viz-3d-show_left_hem-checklist", "value"),
         prevent_initial_call=False,
     )
-    def update_visualization(idx, thresh_type, thresh_value, viz_type_str, color_name, conn_range, alpha, node_size_2d, edge_min_2d, edge_max_2d, node_size_3d, edge_min_3d, edge_max_3d, n_arc_points_3d, show_hemi_right_3d, show_hemi_left_3d):
+    def update_visualization(conn_idx, 
+                             
+                            thresh_type, 
+                            thresh_alpha,
+                            thresh_percent, 
+
+                            viz_fig_type,
+                            color_type, 
+                            color_range,
+                               
+                             node_size_2d, 
+                             edge_width_range_2d, 
+                             
+                             node_size_3d, 
+                             edge_width_range_3d, 
+                             n_arc_points_3d, 
+
+                             show_hemi_right_3d, 
+                             show_hemi_left_3d):
 
         """Update the main visualization figure.
 
         The signature must match the decorated Inputs exactly.
         """
-        idx = int(np.clip(idx or 0, 0, n_frames - 1))
-        viz_type = helpers.str_to_viz_type(viz_type_str)
+        conn_idx = int(np.clip(conn_idx or 0, 0, n_frames - 1))
+        viz_type = helpers.str_to_viz_type(viz_fig_type)
 
         # conn_range is expected to be a two-element sequence [min, max]
         try:
-            color_min, color_max = float(conn_range[0]), float(conn_range[1])
+            color_min, color_max = float(color_range[0]), float(color_range[1])
         except Exception:
             color_min, color_max = 0.0, 1.0
 
@@ -111,19 +130,19 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         # Build update flags
         # -----------------------------
         viz_updates = {
-            "conn_idx": idx,
-            "colorscale": color_name,
+            "conn_idx": conn_idx,
+            "colorscale": color_type,
             "color_min": color_min,
             "color_max": color_max,
             # "update_xyz": global_state.brain_data.chanlocs,
             "viz_type": viz_type,
             "node_size_2d": node_size_2d,
-            "edge_min_2d": edge_min_2d,
-            "edge_max_2d": edge_max_2d,
+            "edge_min_2d": edge_width_range_2d[0],
+            "edge_max_2d": edge_width_range_2d[1],
 
             "node_size_3d": node_size_3d,
-            "edge_min_3d": edge_min_3d,
-            "edge_max_3d": edge_max_3d,
+            "edge_min_3d": edge_width_range_3d[0],
+            "edge_max_3d": edge_width_range_3d[1],
             "n_arc_points_3d": n_arc_points_3d,
 
             "show_hemi_left_3d": show_hemi_left_3d,
@@ -132,8 +151,8 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
 
         threshold_updates = {
             "threshold_type": thresh_type,
-            "threshold": thresh_value,
-            "alpha": alpha,
+            "threshold": thresh_percent,
+            "alpha": thresh_alpha,
         }
 
         # -----------------------------
@@ -148,9 +167,15 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         # -----------------------------
         # Run the visualization update
         # -----------------------------
+        switch_fig = global_state.viz.viz_type != viz_updates['viz_type']
+        print(f"{switch_fig=}")
         update_attributes(global_state.threshold, **threshold_updates)
         global_state.viz.update_attributes(viz_updates=viz_updates)
         global_state.viz.update_figure(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type)
+        # if switch_fig and global_state.viz.viz_dict[ global_state.viz.viz_type] is None:
+        #     global_state.viz.build_figure(brain_data=global_state.brain_data, threshold=global_state.threshold)
+        # else:
+        #     global_state.viz.update_figure(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type)
         fig = global_state.viz.get_figure()
         fig.update_layout(uirevision="keep")
         return fig
@@ -297,19 +322,19 @@ def _brain_data_from_uploaded_array(arr: np.ndarray) -> BrainData:
     return BrainData(arr, chanlocs, brain_mesh, directed=False)
 
 
-def register_data_callbacks(app: Dash, global_state: GlobalAppState, id_prefix: str = "data-comp"):
-    modal_id = f"{id_prefix}-data-modal"
-    btn_id = f"{id_prefix}-add-data-btn"
-    close_id = f"{id_prefix}-data-modal-close"
-    upload_id = f"{id_prefix}-upload"
-    preset_id = f"{id_prefix}-preset-dropdown"
-    gen_btn_id = f"{id_prefix}-gen-btn"
-    gen_n_elec_id = f"{id_prefix}-gen-n-elec"
-    gen_n_mat_id = f"{id_prefix}-gen-n-mat"
-    gen_directed_id = f"{id_prefix}-gen-directed"
-    label_id = f"{id_prefix}-dataset-label"
-    store_id = f"{id_prefix}-data-store"
-    slider_id = f"{id_prefix}-mat-idx"
+def register_data_callbacks(app: Dash, global_state: GlobalAppState):
+    modal_id = "data-modal"
+    btn_id = "data-add_dataset-button"
+    close_id = "data-modal-close-button"
+    upload_id = "data-modal-upload"
+    preset_id = "data-modal-dataset_preset-dropdown"
+    gen_btn_id = "data-modal-gen-button"
+    gen_n_elec_id = "data-modal-gen_n_elec-input"
+    gen_n_mat_id = "data-modal-gen_n_mats-input"
+    gen_directed_id = "data-modal-gen_directed-checkbox"
+    label_id = "data-dataset-label"
+    store_id = "data-store"
+    slider_id = "data-conn_idx-slider"
 
     loader = DataLoader(global_state, preset_configs=PRESET_CONFIGS)
 
@@ -506,9 +531,9 @@ def _map_colors_for_name(name: str):
 def register_threshold_callback(app: Dash, global_state: GlobalAppState):
     """Show/hide the threshold slider and stat-test container based on selection."""
     @app.callback(
-        Output("thresh-comp-slider-container", "style"),
-        Output("thresh-comp-stat-test-container", "style"),
-        Input("thresh-comp-type-dropdown", "value"),
+        Output("thresh-slider_container", "style"),
+        Output("thresh-stat_test_container", "style"),
+        Input("thresh-thresh_type-dropdown", "value"),
         prevent_initial_call=False,
     )
     def toggle_threshold_slider(thresh_type):
@@ -527,4 +552,4 @@ def register_callbacks(app: Dash, global_state: GlobalAppState):
     """Attach all interaction callbacks to the Dash app."""
     register_visualization_callback(app, global_state)
     register_threshold_callback(app, global_state)
-    register_data_callbacks(app, global_state, id_prefix="data-comp")
+    register_data_callbacks(app, global_state)

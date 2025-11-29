@@ -1,13 +1,24 @@
 from dash import html, dcc
 import dash_bootstrap_components as dbc
 from dataclasses import dataclass
+from typing import Optional
 
 container_class = "p-3 my-3 rounded shadow-sm border border-dark"
+
+ID_LIST= [
+    'thresh-stat-alpha-slider',
+    'thresh-stat-stat_type-dropdown',
+    'thresh-thresh_type-dropdown',
+
+
+
+
+]
+
 
 def create_slider(id: str, data_min: float, data_max: float, step: float,
                   label: str = "Frame") -> html.Div:
     """Create a slider for selecting a value within a numeric range."""
-    
     # Ensure valid ordering
     if data_max < data_min:
         raise ValueError("data_max must be >= data_min")
@@ -26,79 +37,6 @@ def create_slider(id: str, data_min: float, data_max: float, step: float,
                 marks={data_min: str(data_min), data_max: str(data_max)},
             ),
         ]
-    )
-
-def create_thesh_component(id: str, label: str = "Threshold") -> html.Div:
-    def _create_stat_test_component(id: str) -> html.Div:
-        test_type_options = [{"label": "t-test", "value": "t"},
-            {"label": "z-test", "value": "z"},
-            {"label": "Wilcoxon", "value": "wilcoxon"},
-            {"label": "Permutation w/o Correction", "value": "permutation w/o correction"},
-            {"label": "Permutation with FDR Correction", "value": "permutation w correction"}
-        ]
-        test_type_dropdown = create_dropdown(
-            id=f"{id}-test-type",
-            options=test_type_options,
-            label="Statistical Test Type",
-            default="t",
-        )
-
-        alpha_slider = create_slider(id, data_min=0, data_max=10, step=0.1, label="Alpha Level (%)")
-        return html.Div(
-            [
-                test_type_dropdown,
-                alpha_slider,
-            ],
-            className="mt-2",
-        )
-    stat_test_component = _create_stat_test_component(id)
-
-    thresh_dropdown_options = [
-        {"label":"Basic", "value": "Basic"},
-        {"label":"MST", "value": "Minimum Spanning Tree"},
-        {"label":"Statistical Test", "value": "Statistical Test"}
-    ]
-
-    thresh_dropdown = create_dropdown(
-        id=f'{id}-type-dropdown',
-        options=thresh_dropdown_options,
-        label="Threshold Type",
-        default="Basic",
-    )
-
-    """Create a threshold input component with optional slider."""
-    return html.Div(
-        children =[
-            thresh_dropdown,
-            html.Div(
-                id=f"{id}-slider-container",
-                children=[
-                    create_slider(id=f"{id}-slider", data_min=0, data_max=100, step=1, label="Threshold Value (%)")
-                ],
-                className="mt-2",
-            ),
-            html.Div(
-                id=f"{id}-stat-test-container",
-                children=[stat_test_component],
-                className="mt-2",
-            ),
-        ],
-        className=container_class,
-    )
-
-def create_dropdown(id: str, options: list[dict], label: str = "Select Option", default: str = None) -> html.Div:
-    """Create a flexible dropdown component."""
-    return html.Div(
-        [
-            dbc.Label(label),
-            dcc.Dropdown(
-                id=id,
-                options=options,
-                value=default if default is not None else (options[0]["value"] if options else None),
-                clearable=False,
-            )
-        ],
-        className="mb-3",
     )
 
 def create_range_slider(id: str, data_min: float, data_max: float, step: float, default, label:str) -> html.Div:
@@ -129,13 +67,89 @@ def create_range_slider(id: str, data_min: float, data_max: float, step: float, 
         ]
     )
 
-def create_2d_options(id_prefix: str) -> html.Div:
-    node_size_slider = create_slider(id=f"{id_prefix}-node-size-2d", data_min=1, data_max=11, step=1, label="Node Size")
+def create_dropdown(id:str, options: list[dict], label: str = "Select Option", clearable=False, default: str = None) -> html.Div:
+    """Create a flexible dropdown component."""
+    id_tag='dropdown'
+    return html.Div(
+        [
+            dbc.Label(label),
+            dcc.Dropdown(
+                id=id,
+                options=options,
+                value=default if default is not None else (options[0]["value"] if options else None),
+                clearable=clearable,
+            )
+        ],
+        className="mb-3",
+    )
 
-    edge_width_range = create_range_slider(f"{id_prefix}-edge-width-range-2d", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0], label="Edge Width Size")
+def create_thresh_component() -> html.Div:
+    label='Threshold'
+    def _create_stat_test_component() -> html.Div:
+        test_type_options = [{"label": "t-test", "value": "t"},
+            {"label": "z-test", "value": "z"},
+            {"label": "Wilcoxon", "value": "wilcoxon"},
+            {"label": "Permutation w/o Correction", "value": "permutation w/o correction"},
+            {"label": "Permutation with FDR Correction", "value": "permutation w correction"}
+        ]
+        test_type_dropdown = create_dropdown(
+            id='thresh-stat-stat_type-dropdown',
+            options=test_type_options,
+            label="Statistical Test Type",
+            default="t",
+        )
+
+        alpha_slider = create_slider(id='thresh-stat-alpha-slider', data_min=0, data_max=10, step=0.1, label="Alpha Level (%)")
+        return html.Div(
+            [
+                test_type_dropdown,
+                alpha_slider,
+            ],
+            className="mt-2",
+        )
+    stat_test_component = _create_stat_test_component()
+
+    thresh_dropdown_options = [
+        {"label":"Basic", "value": "Basic"},
+        {"label":"MST", "value": "Minimum Spanning Tree"},
+        {"label":"Statistical Test", "value": "Statistical Test"}
+    ]
+
+    thresh_dropdown = create_dropdown(
+        id='thresh-thresh_type-dropdown',
+        options=thresh_dropdown_options,
+        label="Threshold Type",
+        default="Basic",
+    )
+
+    """Create a threshold input component with optional slider."""
+    return html.Div(
+        children =[
+            thresh_dropdown,
+            html.Div(
+                id='thresh-slider_container',
+                children=[
+                    create_slider(id=f"thresh-percent-slider", data_min=0, data_max=100, step=1, label="Threshold Value (%)")
+                ],
+                className="mt-2",
+            ),
+            html.Div(
+                id=f"thresh-stat_test_container",
+                children=[stat_test_component],
+                className="mt-2",
+            ),
+        ],
+        className=container_class,
+    )
+
+
+def create_2d_options() -> html.Div:
+    node_size_slider = create_slider(id="viz-2d-node_size-slider", data_min=1, data_max=11, step=1, label="Node Size")
+
+    edge_width_range = create_range_slider(id="viz-2d-edge_width-range_slider", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0], label="Edge Width Size")
 
     return html.Div(
-        id=f"{id_prefix}-options-2d",
+        id="viz-2d-contianer",
         children=[
             html.Hr(),
             html.H5("2D Visualization Options"),
@@ -145,13 +159,13 @@ def create_2d_options(id_prefix: str) -> html.Div:
         style={"display": "none"},
     )
 
-def create_3d_options(id_prefix: str) -> html.Div:
-    node_size_slider = create_slider(id=f"{id_prefix}-node-size-3d", data_min=1, data_max=11, step=1, label="Node Size")
+def create_3d_options() -> html.Div:
+    node_size_slider = create_slider(id="viz-3d-node_size-slider", data_min=1, data_max=11, step=1, label="Node Size")
 
-    edge_width_range = create_range_slider(f"{id_prefix}-edge-width-range-3d", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0],label="Edge Width Size")
+    edge_width_range = create_range_slider("viz-3d-edge_width-range_slider", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0],label="Edge Width Size")
 
     arc_points_slider = create_slider(
-        id=f"{id_prefix}-arc-points-3d",
+        id="viz-3d-n_arc_points-slider",
         label="Arc Curve Resolution (# Points)",
         data_min=1,
         data_max=20,
@@ -162,7 +176,7 @@ def create_3d_options(id_prefix: str) -> html.Div:
         [
             dbc.Col(
                 dbc.Checklist(
-                    id=f"{id_prefix}-show-left-3d",
+                    id="viz-3d-show_left_hem-checklist",
                     options=[{"label": "Show Left Hemisphere", "value": True}],
                     value=[True],
                     switch=True,
@@ -171,7 +185,7 @@ def create_3d_options(id_prefix: str) -> html.Div:
             ),
             dbc.Col(
                 dbc.Checklist(
-                    id=f"{id_prefix}-show-right-3d",
+                    id="viz-3d-show_right_hem-checklist",
                     options=[{"label": "Show Right Hemisphere", "value": True}],
                     value=[True],
                     switch=True,
@@ -182,7 +196,7 @@ def create_3d_options(id_prefix: str) -> html.Div:
     )
 
     return html.Div(
-        id=f"{id_prefix}-3d-options",
+        id="viz-3d-container",
         children=[
             html.Hr(),
             html.H5("3D Visualization Options"),
@@ -196,10 +210,10 @@ def create_3d_options(id_prefix: str) -> html.Div:
     )
 
 
-def create_viz_controls(id_prefix: str, n_mat: int) -> html.Div:
+def create_viz_controls(n_mat: int) -> html.Div:
 
     viz_type_dropdown = create_dropdown(
-        id="viz-type-dropdown",
+        id="viz-fig_type-dropdown",
         label="Visualization Type",
         default="2D",
         options=[
@@ -236,17 +250,17 @@ def create_viz_controls(id_prefix: str, n_mat: int) -> html.Div:
     ]
 
     color_map_dropdown = create_dropdown(
-        id="color-type-dropdown",
+        id="viz-color_type-dropdown",
         label="Color Map",
         default="Viridis",
         options=color_map_options
     )
 
-    color_range = create_range_slider(id="conn-range", data_max=1, data_min=0, step=0.01, default=[0.0,1.0], label="Color Range")
+    color_range = create_range_slider(id="viz-color-range_slider", data_max=1, data_min=0, step=0.01, default=[0.0,1.0], label="Color Range")
 
     # 2D/3D option blocks
-    options_2d = create_2d_options(id_prefix)
-    options_3d = create_3d_options(id_prefix)
+    options_2d = create_2d_options()
+    options_3d = create_3d_options()
 
     return dbc.Container(
         children=[
@@ -262,11 +276,11 @@ def create_viz_controls(id_prefix: str, n_mat: int) -> html.Div:
 
 
 
-def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
+def create_data_component(n_mat: int) -> html.Div:
     """Create data selection component with add/load dataset controls."""
     # Slider over connectivity matrices
     animation_slider = create_slider(
-        id=f"{id_prefix}-mat-idx",
+        id="data-conn_idx-slider",
         data_max=n_mat-1,
         data_min=0,
         step=1,
@@ -275,7 +289,7 @@ def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
 
     # Label that shows either "No dataset loaded" or current dataset name
     data_label = html.Span(
-        id=f"{id_prefix}-dataset-label",
+        id="data-dataset-label",
         children="No dataset loaded",
         className="ms-2",
     )
@@ -283,7 +297,7 @@ def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
     # "+" button to add / replace data
     add_data_button = dbc.Button(
         "+",
-        id=f"{id_prefix}-add-data-btn",
+        id="data-add_dataset-button",
         color="primary",
         size="sm",
         className="ms-2",
@@ -300,7 +314,7 @@ def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
                     # 1) Load your own
                     html.H5("1. Load your own data"),
                     dcc.Upload(
-                        id=f"{id_prefix}-upload",
+                        id="data-modal-upload",
                         children=html.Div(
                             [
                                 "Drag and drop or ",
@@ -315,17 +329,12 @@ def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
 
                     # 2) Choose from preset
                     html.H5("2. Choose a preset dataset"),
-                    dcc.Dropdown(
-                        id=f"{id_prefix}-preset-dropdown",
-                        placeholder="Select preset dataset...",
-                        options=[
+                    create_dropdown(id="data-modal-dataset_preset-dropdown", options=[
                             {"label": "Small undirected (n=10, mats=5)", "value": "small_undirected"},
                             {"label": "Medium directed (n=20, mats=10)", "value": "medium_directed"},
                             {"label": "Large undirected (n=64, mats=20)", "value": "large_undirected"},
                         ],
-                        clearable=True,
-                        className="mb-3",
-                    ),
+                        clearable=True),
 
                     html.Hr(),
 
@@ -337,7 +346,8 @@ def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
                                 [
                                     dbc.Label("Number of nodes"),
                                     dbc.Input(
-                                        id=f"{id_prefix}-gen-n-elec",
+                                        # id=f"{id_prefix}-gen-n-elec",
+                                        id="data-modal-gen_n_elec-input",
                                         type="number",
                                         min=2,
                                         step=1,
@@ -350,7 +360,7 @@ def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
                                 [
                                     dbc.Label("Number of mats"),
                                     dbc.Input(
-                                        id=f"{id_prefix}-gen-n-mat",
+                                        id="data-modal-gen_n_mats-input",
                                         type="number",
                                         min=1,
                                         step=1,
@@ -363,11 +373,12 @@ def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
                                 [
                                     dbc.Label("Directed? "),
                                     dbc.Checkbox(
-                                        id=f"{id_prefix}-gen-directed",
+                                        # id=f"{id_prefix}-gen-directed",
+                                        id="data-modal-gen_directed-checkbox",
                                         value=False,
                                     ),
                                 ],
-                                # md=4,
+                                md=4,
                                 className="d-flex align-items-end",
                             ),
                         ],
@@ -375,7 +386,8 @@ def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
                     ),
                     dbc.Button(
                         "Generate",
-                        id=f"{id_prefix}-gen-btn",
+                        # id=f"{id_prefix}-gen-btn",
+                        id="data-modal-gen-button",
                         color="secondary",
                         className="mt-2",
                         n_clicks=0,
@@ -385,13 +397,14 @@ def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
             dbc.ModalFooter(
                 dbc.Button(
                     "Close",
-                    id=f"{id_prefix}-data-modal-close",
+                    id="data-modal-close-button",
+                    # id=f"{id_prefix}-data-modal-close",
                     className="ms-auto",
                     n_clicks=0,
                 )
             ),
         ],
-        id=f"{id_prefix}-data-modal",
+        id="data-modal",
         is_open=False,
         centered=True,
         backdrop="static",
@@ -399,7 +412,8 @@ def create_data_component(id_prefix: str, n_mat: int) -> html.Div:
 
     # Store to keep current dataset metadata (name, source, etc.)
     data_store = dcc.Store(
-        id=f"{id_prefix}-data-store",
+        # id=f"{id_prefix}-data-store",
+        id="data-store",
         data={
             "name": None,
             "source": None,  # "simulated", "uploaded", "preset"
