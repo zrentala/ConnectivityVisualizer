@@ -20,6 +20,7 @@ class UpdateType(Enum):
     THRESHOLD=auto()
     COLOR=auto()
     ALL=auto()
+    SWITCH_FIG=auto()
 
 class VizType(Enum):
     FIG2D=auto()
@@ -425,6 +426,7 @@ def _get_candidate_edges(edge_trace_idx, old_thresh_mask, new_thresh_mask, updat
 
         ij_iter = _get_ij_iter(n_nodes=n_nodes, directed=directed)
         changed_edges = []
+        print(f"{update_type=}")
         # ---- ALL ----
         if update_type is UpdateType.ALL:
             changed_edges = [

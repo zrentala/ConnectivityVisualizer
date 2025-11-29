@@ -1,15 +1,15 @@
 # visualization/ui.py
 from dash import html, dcc
 import dash_bootstrap_components as dbc
-from interaction.ui_controls import create_slider, create_thesh_component, create_viz_controls, create_data_component
+from interaction.ui_controls import create_slider, create_thresh_component, create_viz_controls, create_data_component
 import dash_split_pane as dsp
 
 
 def create_layout(n_mat, initial_fig):
     """Responsive layout that fits the viewport and keeps margins/padding (no fixed pixels)."""
-    threshold_comp = create_thesh_component(id="thresh-comp", label="Threshold")
-    viz_controls = create_viz_controls(id_prefix="main", n_mat=n_mat)
-    data_component = create_data_component(id_prefix= "data-comp", n_mat= n_mat)
+    threshold_comp = create_thresh_component()
+    viz_controls = create_viz_controls(n_mat=n_mat)
+    data_component = create_data_component(n_mat= n_mat)
 
     left = html.Div(
         [
@@ -30,7 +30,7 @@ def create_layout(n_mat, initial_fig):
         [
             html.H3("Brain Connectivity Visualization", className="mb-3"),
             dcc.Graph(
-                id="main-visualization",
+                id="split-right-fig",
                 figure=initial_fig,
                 className="main-graph",
                 # useResizeHandler=True,
@@ -43,7 +43,7 @@ def create_layout(n_mat, initial_fig):
     )
 
     split_pane = dsp.DashSplitPane(
-        id="main-split",
+        id="split",
         children=[left, right],
         split="vertical",
         size="30%",

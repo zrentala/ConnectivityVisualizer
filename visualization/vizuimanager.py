@@ -81,7 +81,6 @@ class VizUIManager:
         self.color_max = viz_updates["color_max"]
         self.color_min = viz_updates["color_min"]
         self.viz_type = viz_updates["viz_type"]
-
         # forward attribute updates to active visualizer
         self.viz_dict[self.viz_type].update_attributes(viz_updates)
 
@@ -97,33 +96,69 @@ class VizUIManager:
         color_scale_info = (scale, data_min, data_max, zmin, zmax, self.colorscale)
 
         # compute and store threshold mask
-        self._mask_cache = threshold.apply_threshold(
+        _, self._mask_cache = threshold.apply_threshold(
             brain_data.conn_mat, self.conn_idx
         )
 
-        self.viz_dict[self.viz_type].build_figure(
-            C=C,
-            labels=brain_data.labels,
-            directed=brain_data.directed,
-            color_scale_info= color_scale_info
-        )
+        if self.viz_type == VizType.FIG2D:
+            self.viz_dict[self.viz_type].build_figure(
+                C=C,
+                labels=brain_data.labels,
+                directed=brain_data.directed,
+                color_scale_info= color_scale_info
+            )
+        elif self.viz_type == VizType.FIG3D:
+            self.viz_dict[self.viz_type].build_figure(
+                C=C,
+                labels=brain_data.labels,
+                directed=brain_data.directed,
+                color_scale_info= color_scale_info,
+                brain_data=brain_data.brain_mesh
+            )
+        elif self.viz_type == VizType.FIGHEATMAP:
+            self.viz_dict[self.viz_type].build_figure(
+                C=C,
+                labels=brain_data.labels,
+                directed=brain_data.directed,
+                color_scale_info= color_scale_info
+            )
 
     # ------------------------------------------------------------------
     # Update figure in place (fast)
     # ------------------------------------------------------------------
     def update_figure(self, brain_data: BrainData, threshold: Threshold, update_type: UpdateType):
-        C = helpers._get_mat_at_idx(brain_data.conn_mat, self.conn_idx)
-        np.fill_diagonal(C, 0.0)
-
-        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C, color_min=self.color_min, color_max=self.color_max)
-
-        color_scale_info = (scale, data_min, data_max, zmin, zmax, self.colorscale)
-
         old_mask = self._mask_cache
-        new_mask = threshold.apply_threshold(brain_data.conn_mat, self.conn_idx)
+        C, new_mask = threshold.apply_threshold(brain_data.conn_mat, self.conn_idx)
         self._mask_cache = new_mask.copy()
+        np.fill_diagonal(C, 0.0)
+        
+        scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C, color_min=self.color_min, color_max=self.color_max)
+        color_scale_info = (scale, data_min, data_max, zmin, zmax, self.colorscale)
+        
 
-        self.viz_dict[self.viz_type].update_figure(
+        if self.viz_type == VizType.FIG2D:
+            self.viz_dict[self.viz_type].update_figure(
+            C=C,
+            labels=brain_data.labels,
+            directed=brain_data.directed,
+            update_type=update_type,
+            new_thresh_mask=new_mask,
+            old_thresh_mask=old_mask,
+            color_scale_info=color_scale_info
+        )
+        elif self.viz_type == VizType.FIG3D:
+            self.viz_dict[self.viz_type].update_figure(
+            C=C,
+            labels=brain_data.labels,
+            directed=brain_data.directed,
+            update_type=update_type,
+            new_thresh_mask=new_mask,
+            old_thresh_mask=old_mask,
+            color_scale_info=color_scale_info,
+            brain_mesh=brain_data.brain_mesh
+        )
+        elif self.viz_type == VizType.FIGHEATMAP:
+            self.viz_dict[self.viz_type].update_figure(
             C=C,
             labels=brain_data.labels,
             directed=brain_data.directed,
