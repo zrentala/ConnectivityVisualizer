@@ -69,7 +69,7 @@ class HandlesNodes():
         # node_opacity: float = 0.75,
         edge_width_range: Tuple[float]=(0.4, 5),
         edge_opacity: float = 0.5,
-        arc_radius: float=1.0,
+        arc_radius: float=0.5,
         
         node_fill: str = "lightgreen",
         node_edge: str = "black",
@@ -547,9 +547,9 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         node_fill: str = "lightgreen",
         node_edge: str = "black",
         arc_radius: float= 20.0,
-        n_arc_points: int=4,
         show_hemi_left: bool=True,
         show_hemi_right: bool=True,
+        brain_mesh_opacity: float=0.25
     ) -> None:
         ConnectivityView.__init__(self,default_pos_color=default_pos_color,
             default_neg_color=default_neg_color)
@@ -564,9 +564,10 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                          arc_radius=arc_radius
                          )
 
-        self.n_arc_points = n_arc_points
         self.show_hemi_left = show_hemi_left
         self.show_hemi_right = show_hemi_right
+        self.brain_mesh_opacity = brain_mesh_opacity
+        self._mesh_trace_idx = {}
        
     def update_locs(self, chanlocs):
            # Parse → sx, sy, sz, labels
@@ -575,31 +576,126 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         # 2D normalized topography
         self.locs = helpers.compute_locs_3d(sx=sx, sy=sy, sz=sz)
 
-    def _build_base_traces(self, labels, brain_mesh: Optional[pv.PolyData]) -> List[go.Scattergl]:
+    # def _build_base_traces(self, labels, brain_mesh: Optional[pv.PolyData]) -> List[go.Scattergl]:
+    #     if brain_mesh is not None and pv is not None and brain_mesh.n_points > 0:
+    #         pts = np.asarray(brain_mesh.points)
+    #         faces_np = np.asarray(brain_mesh.faces)
+    #         faces = faces_np.reshape(-1, 4)[:, 1:4].astype(int)
+    #         head = go.Mesh3d(
+    #             x=pts[:, 0], y=pts[:, 1], z=pts[:, 2],
+    #             i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
+    #             color="lightgray", opacity=0.25, flatshading=True,
+    #             lighting=dict(ambient=0.6, diffuse=0.6, specular=0.1),
+    #             name="Brain"
+    #         )
+
+    #     x, y, z = self.locs[:, 0], self.locs[:, 1], self.locs[:, 2]
+    #     nodes = go.Scatter3d(
+    #         x=x, y=y, z=z,
+    #         mode="markers+text",
+    #         text=labels,
+    #         # opacity=self.node_opacity,
+    #         textposition="top center",
+    #         textfont=dict(size=10, color="black"),
+    #         marker=dict(size=self.node_size),
+    #         name="Electrodes"
+    #     )
+    #     return [head, nodes]
+    def _build_base_traces(self, labels, brain_mesh: Optional[pv.PolyData]) -> List[go.Scatter3d]:
+        traces = []
+
         if brain_mesh is not None and pv is not None and brain_mesh.n_points > 0:
             pts = np.asarray(brain_mesh.points)
             faces_np = np.asarray(brain_mesh.faces)
             faces = faces_np.reshape(-1, 4)[:, 1:4].astype(int)
-            head = go.Mesh3d(
-                x=pts[:, 0], y=pts[:, 1], z=pts[:, 2],
-                i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
-                color="lightgray", opacity=0.25, flatshading=True,
-                lighting=dict(ambient=0.6, diffuse=0.6, specular=0.1),
-                name="Brain"
-            )
 
+            # ========= LEFT HEMISPHERE =========
+            left_mask = pts[:, 0] < 0
+            left_faces_mask = left_mask[faces].all(axis=1)
+            lf = faces[left_faces_mask]
+
+            if lf.size > 0:
+                # remap indices
+                new_idx = np.flatnonzero(left_mask)
+                remap = {old: new for new, old in enumerate(new_idx)}
+                lf_remap = np.vectorize(remap.get)(lf)
+
+                left_pts = pts[left_mask]
+                traces.append(go.Mesh3d(
+                    x=left_pts[:, 0], 
+                    y=left_pts[:, 1], 
+                    z=left_pts[:, 2],
+                    i=lf_remap[:, 0], 
+                    j=lf_remap[:, 1], 
+                    k=lf_remap[:, 2],
+                    color="lightgray", 
+                    opacity=self.brain_mesh_opacity, 
+                    name="Brain_L"
+                ))
+                self._mesh_trace_idx["left"] = len(fig.data) - 1
+
+            # ========= RIGHT HEMISPHERE =========
+            right_mask = pts[:, 0] > 0
+            right_faces_mask = right_mask[faces].all(axis=1)
+            rf = faces[right_faces_mask]
+
+            if rf.size > 0:
+                new_idx = np.flatnonzero(right_mask)
+                remap = {old: new for new, old in enumerate(new_idx)}
+                rf_remap = np.vectorize(remap.get)(rf)
+
+                right_pts = pts[right_mask]
+                traces.append(go.Mesh3d(
+                    x=right_pts[:, 0], 
+                    y=right_pts[:, 1], 
+                    z=right_pts[:, 2],
+                    i=rf_remap[:, 0], 
+                    j=rf_remap[:, 1], 
+                    k=rf_remap[:, 2],
+                    color="lightgray", 
+                    opacity=self.brain_mesh_opacity, 
+                    name="Brain_R"
+                ))
+
+        # ========= NODES =========
         x, y, z = self.locs[:, 0], self.locs[:, 1], self.locs[:, 2]
         nodes = go.Scatter3d(
             x=x, y=y, z=z,
             mode="markers+text",
             text=labels,
-            # opacity=self.node_opacity,
             textposition="top center",
             textfont=dict(size=10, color="black"),
-            marker=dict(size=self.node_size),
+            marker=dict(size=self.node_size, color=self.node_fill),
             name="Electrodes"
         )
-        return [head, nodes]
+        traces.append(nodes)
+        return traces
+
+
+    
+    def toggle_hemisphere_visibility(self, fig: go.Figure, left=None, right=None):
+
+        # Coerce to actual booleans (fixes list inputs)
+        print(f"{left=}")
+        if isinstance(left, list):
+            left = left[0]
+        if isinstance(right, list):
+            right = right[0]
+
+        if left is not None:
+            self.show_hemi_left = bool(left)
+
+        if right is not None:
+            self.show_hemi_right = bool(right)
+
+        mesh_l_trace = fig.data[self._mesh_trace_idx["left"]]
+        mesh_r_trace = fig.data[self._mesh_trace_idx["right"]]
+        mesh_l_trace.visibile = self.show_hemi_left
+        mesh_r_trace.visible = self.show_hemi_right
+    
+
+
+
 
     ### NEED TO FIX INPUTS
     def _get_edge_path(self, i: int, j: int, C: np.ndarray, m: int = 60) -> np.ndarray:
@@ -813,6 +909,13 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
             )
 
         with fig.batch_update():
+            self.toggle_hemisphere_visibility(fig, self.show_hemi_left, self.show_hemi_right)
+            mesh_l_trace = fig.data[self._mesh_trace_idx["left"]]
+            mesh_r_trace = fig.data[self._mesh_trace_idx["right"]]
+            mesh_l_trace.opacity = self.brain_mesh_opacity
+            mesh_r_trace.opacity = self.brain_mesh_opacity
+
+            print("hemisphere viz")
             if update_type == UpdateType.NODES:
 
                 node_trace = fig.data[self._node_trace_idx]
@@ -873,6 +976,6 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         # self.node_opacity = viz_updates["node_opacity_3d"]
         self.edge_opacity = viz_updates["edge_opacity_3d"]
         self.edge_width_range = viz_updates["edge_width_range_3d"]
-        self.n_arc_points = viz_updates["n_arc_points_3d"]
         self.show_hemi_left = viz_updates["show_hemi_left_3d"]
         self.show_hemi_right = viz_updates["show_hemi_right_3d"]
+        self.brain_mesh_opacity = viz_updates["brain_mesh_opacity_3d"]

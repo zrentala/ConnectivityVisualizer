@@ -164,19 +164,13 @@ def create_2d_options() -> html.Div:
     )
 
 def create_3d_options() -> html.Div:
-    node_size_slider = create_slider(id="viz-3d-node_size-slider", data_min=1, data_max=11, step=1, label="Node Size")
+    node_size_slider = create_slider(id="viz-3d-node_size-slider", data_min=1, data_max=50, step=1, label="Node Size")
     node_opacity_slider = create_slider(id="viz-3d-node_opacity-slider", data_min=0, data_max=1, step=0.01, label="Node Opacity (%)")
 
     edge_opacity_slider = create_slider(id="viz-3d-edge_opacity-slider", data_min=0, data_max=1, step=0.01, label="Edge Opacity (%)")
     edge_width_range = create_range_slider("viz-3d-edge_width-range_slider", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0],label="Edge Width Size")
 
-    arc_points_slider = create_slider(
-        id="viz-3d-n_arc_points-slider",
-        label="Arc Curve Resolution (# Points)",
-        data_min=1,
-        data_max=20,
-        step=1,
-    )
+    brain_mesh_opacity_slider = create_slider(id="viz-3d-brain_mesh_opacity-slider", data_min=0, data_max=1, step=0.01, label="Brain Mesh Opacity (%)")
 
     hemisphere_row = dbc.Row(
         [
@@ -210,9 +204,9 @@ def create_3d_options() -> html.Div:
             # node_opacity_slider,
             edge_width_range,
             edge_opacity_slider,
-            arc_points_slider,
             html.Br(),
             hemisphere_row,
+            brain_mesh_opacity_slider
         ],
         style={"display": "none"},
     )

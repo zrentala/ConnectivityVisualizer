@@ -181,12 +181,12 @@ def determine_update_type_from_trigger(trigger_id: str) -> UpdateType:
     if trigger_id == "data-conn_idx-slider":
         return UpdateType.ALL
 
-    # Hemi toggles
-    if trigger_id in {
-        "viz-3d-show_left_hem-checklist",
-        "viz-3d-show_right_hem-checklist",
-    }:
-        return UpdateType.VISIBLE
+    # # Hemi toggles
+    # if trigger_id in {
+    #     "viz-3d-show_left_hem-checklist",
+    #     "viz-3d-show_right_hem-checklist",
+    # }:
+    #     return UpdateType.VISIBLE
 
     # Default fallback
     return UpdateType.NONE
@@ -219,10 +219,10 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         # Input("viz-3d-node_opacity-slider", "value"),
         Input("viz-3d-edge_width-range_slider", "value"),
         Input("viz-3d-edge_opacity-slider", "value"),
-        Input("viz-3d-n_arc_points-slider", "value"),
 
         Input("viz-3d-show_right_hem-checklist", "value"),
         Input("viz-3d-show_left_hem-checklist", "value"),
+        Input("viz-3d-brain_mesh_opacity-slider", "value"),
         prevent_initial_call=False,
     )
     def update_visualization(conn_idx, 
@@ -244,10 +244,10 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
                             #  node_opacity_3d,
                              edge_width_range_3d, 
                              edge_opacity_3d,
-                             n_arc_points_3d, 
 
                              show_hemi_right_3d, 
-                             show_hemi_left_3d):
+                             show_hemi_left_3d,
+                             brain_mesh_opacity):
 
         """Update the main visualization figure.
 
@@ -283,10 +283,10 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             # "node_opacity_3d": node_opacity_3d,
             "edge_width_range_3d": edge_width_range_3d,
             "edge_opacity_3d": edge_opacity_3d,
-            "n_arc_points_3d": n_arc_points_3d,
 
-            "show_hemi_left_3d": show_hemi_left_3d,
-            "show_hemi_right_3d": show_hemi_right_3d,
+            "show_hemi_left_3d": bool(show_hemi_left_3d and len(show_hemi_left_3d) > 0),
+            "show_hemi_right_3d": bool(show_hemi_right_3d and len(show_hemi_right_3d) > 0),
+            "brain_mesh_opacity_3d": brain_mesh_opacity,
         }
 
         threshold_updates = {
