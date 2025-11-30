@@ -23,126 +23,173 @@ PRESET_CONFIGS = {
     "large_undirected": {"n_elec": 64, "directed": False, "n_mat": 20},
 }
 
-def determine_update_type(
-        viz_manager: VizUIManager,
-        threshold: Threshold,
-        updates: dict
-    ) -> UpdateType:
+# def determine_update_type(
+#         viz_manager: VizUIManager,
+#         threshold: Threshold,
+#         updates: dict
+#     ) -> UpdateType:
 
-    def strip_fig_type_tag(s: str) -> str:
-        return s[:-3] if s.endswith(("_2d", "_3d")) else s
+#     def strip_fig_type_tag(s: str) -> str:
+#         return s[:-3] if s.endswith(("_2d", "_3d")) else s
 
-    def check_fields(fields, objs, update_type):
-        """
-        General field comparison function.
+#     def check_fields(fields, objs, update_type):
+#         """
+#         General field comparison function.
 
-        fields: list of field names (may include _2d/_3d)
-        objs: list of objects to compare against (viz_manager, fig, threshold)
-        update_type: UpdateType to return on mismatch
-        """
-        for field in fields:
-            if field not in updates:
-                continue
+#         fields: list of field names (may include _2d/_3d)
+#         objs: list of objects to compare against (viz_manager, fig, threshold)
+#         update_type: UpdateType to return on mismatch
+#         """
+#         for field in fields:
+#             if field not in updates:
+#                 continue
 
-            base = strip_fig_type_tag(field)
-            print(f"{base=}")
-            new_value = updates[field]
+#             base = strip_fig_type_tag(field)
+#             # print(f"{base=}")
+#             new_value = updates[field]
 
-            for obj in objs:
-                # print(f"{obj}")
+#             for obj in objs:
+#                 # print(f"{obj}")
                 
-                # exact field first (viz_manager stores UI values this way)
-                if hasattr(obj, field):
-                    old_value = getattr(obj, field)
-                # fallback to base field (figure might store base)
-                elif hasattr(obj, base):
-                    old_value = getattr(obj, base)
-                else:
-                    continue  # skip missing attributes entirely
+#                 # exact field first (viz_manager stores UI values this way)
+#                 if hasattr(obj, field):
+#                     old_value = getattr(obj, field)
+#                 # fallback to base field (figure might store base)
+#                 elif hasattr(obj, base):
+#                     old_value = getattr(obj, base)
+#                 else:
+#                     continue  # skip missing attributes entirely
 
-                if old_value != new_value:
-                    return update_type
+#                 if old_value != new_value:
+#                     return update_type
 
-        return None
-
-
-    # ---------------------------------------------------------
-    # Objects used for comparison
-    # ---------------------------------------------------------
-    fig = viz_manager.viz_dict[viz_manager.viz_type]
-
-    # ---------------------------------------------------------
-    # 3. Threshold-related updates
-    # ---------------------------------------------------------
-    threshold_fields = ["threshold", "threshold_type", "alpha"]
-
-    result = check_fields(
-        fields=threshold_fields,
-        objs=[threshold],
-        update_type=UpdateType.THRESHOLD
-    )
-    if result:
-        return result
+#         return None
 
 
-    # ---------------------------------------------------------
-    # 1. Visualization-related updates (COLORSCALE + EDGE WIDTHS)
-    # ---------------------------------------------------------
-    color_fields = [
-        "colorscale",
-        "color_min",
-        "color_max",
-        "edge_width_range_2d",
-        "edge_width_range_3d",
-        "edge_opacity_2d",
-        "edge_opacity_3d"
-    ]
+#     # ---------------------------------------------------------
+#     # Objects used for comparison
+#     # ---------------------------------------------------------
+#     fig = viz_manager.viz_dict[viz_manager.viz_type]
 
-    result = check_fields(
-        fields=color_fields,
-        objs=[viz_manager, fig],
-        update_type=UpdateType.VISIBLE
-    )
-    # print("HERE")
-    if result:
-        return result
+#     # ---------------------------------------------------------
+#     # 3. Threshold-related updates
+#     # ---------------------------------------------------------
+#     threshold_fields = ["threshold", "threshold_type", "alpha"]
 
-    # ---------------------------------------------------------
-    # 2. NODE updates (→ NODES update)
-    # ---------------------------------------------------------
-    node_fields = [
-        "node_size_2d",
-        "node_size_3d",
-    ]
+#     result = check_fields(
+#         fields=threshold_fields,
+#         objs=[threshold],
+#         update_type=UpdateType.THRESHOLD
+#     )
+#     if result:
+#         return result
 
-    result = check_fields(
-        fields=node_fields,
-        objs=[viz_manager, fig],
-        update_type=UpdateType.NODES
-    )
-    # print(result)
-    if result:
-        print("NODES")
-        return result
+
+#     # ---------------------------------------------------------
+#     # 1. Visualization-related updates (COLORSCALE + EDGE WIDTHS)
+#     # ---------------------------------------------------------
+#     color_fields = [
+#         "colorscale",
+#         "color_min",
+#         "color_max",
+#         "edge_width_range_2d",
+#         "edge_width_range_3d",
+#         "edge_opacity_2d",
+#         "edge_opacity_3d"
+#     ]
+
+#     result = check_fields(
+#         fields=color_fields,
+#         objs=[viz_manager, fig],
+#         update_type=UpdateType.VISIBLE
+#     )
+   
+#     if result:
+#         print("VISIBLE")
+#         return result
+
+#     # ---------------------------------------------------------
+#     # 2. NODE updates (→ NODES update)
+#     # ---------------------------------------------------------
+#     node_fields = [
+#         "node_size_2d",
+#         "node_size_3d",
+#     ]
+
+#     result = check_fields(
+#         fields=node_fields,
+#         objs=[viz_manager, fig],
+#         update_type=UpdateType.NODES
+#     )
+#     # print(result)
+#     if result:
+#         print("NODES")
+#         return result
 
     
-    # ---------------------------------------------------------
-    # 4. Other (conn_idx → full ALL update)
-    # ---------------------------------------------------------
-    result = check_fields(
-        fields=["conn_idx"],
-        objs=[viz_manager],
-        update_type=UpdateType.ALL
-    )
-    if result:
-        return result
+#     # ---------------------------------------------------------
+#     # 4. Other (conn_idx → full ALL update)
+#     # ---------------------------------------------------------
+#     result = check_fields(
+#         fields=["conn_idx"],
+#         objs=[viz_manager],
+#         update_type=UpdateType.ALL
+#     )
+#     if result:
+#         print("ALL")
+#         return result
 
-    # ---------------------------------------------------------
-    # 5. No update
-    # ---------------------------------------------------------
+#     # ---------------------------------------------------------
+#     # 5. No update
+#     # ---------------------------------------------------------
+#     return UpdateType.NONE
+
+
+def determine_update_type_from_trigger(trigger_id: str) -> UpdateType:
+
+    # Threshold changes
+    if trigger_id in {
+        "thresh-thresh_type-dropdown",
+        "thresh-percent-slider",
+        "thresh-stat-alpha-slider",
+    }:
+        return UpdateType.THRESHOLD
+
+    # Node changes (2D & 3D)
+    if trigger_id in {
+        "viz-2d-node_size-slider",
+        "viz-3d-node_size-slider",
+    }:
+        return UpdateType.NODES
+
+    # Visibility / edge / color
+    if trigger_id in {
+        "viz-color_type-dropdown",
+        "viz-color-range_slider",
+        "viz-2d-edge_width-range_slider",
+        "viz-2d-edge_opacity-slider",
+        "viz-3d-edge_width-range_slider",
+        "viz-3d-edge_opacity-slider",
+    }:
+        return UpdateType.VISIBLE
+
+    # Switching figures (2D <-> 3D)
+    if trigger_id == "viz-fig_type-dropdown":
+        return UpdateType.ALL
+
+    # Frame change
+    if trigger_id == "data-conn_idx-slider":
+        return UpdateType.ALL
+
+    # Hemi toggles
+    if trigger_id in {
+        "viz-3d-show_left_hem-checklist",
+        "viz-3d-show_right_hem-checklist",
+    }:
+        return UpdateType.VISIBLE
+
+    # Default fallback
     return UpdateType.NONE
-
-
 
 def register_visualization_callback(app: Dash, global_state: GlobalAppState):
     n_frames = int(global_state.brain_data.conn_mat.shape[0])
@@ -206,6 +253,7 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
 
         The signature must match the decorated Inputs exactly.
         """
+        print(f"{node_size_2d=}")
         conn_idx = int(np.clip(conn_idx or 0, 0, n_frames - 1))
         viz_type = helpers.str_to_viz_type(viz_fig_type)
 
@@ -250,12 +298,9 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         # -----------------------------
         # Determine update type
         # -----------------------------
-        update_type = determine_update_type(
-            global_state.viz,
-            global_state.threshold,
-            threshold_updates | viz_updates
-        )
-        print(f"{update_type=}")
+        trigger = callback_context.triggered[0]["prop_id"].split(".")[0]
+        update_type = determine_update_type_from_trigger(trigger)
+        print("update_type:", update_type)
 
         # -----------------------------
         # Run the visualization update

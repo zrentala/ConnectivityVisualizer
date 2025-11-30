@@ -17,12 +17,13 @@ ID_LIST= [
 
 
 def create_slider(id: str, data_min: float, data_max: float, step: float,
-                  label: str = "Frame") -> html.Div:
+                  label: str = "Frame", default: Optional[float] =None) -> html.Div:
     """Create a slider for selecting a value within a numeric range."""
     # Ensure valid ordering
     if data_max < data_min:
         raise ValueError("data_max must be >= data_min")
-
+    if default is None:
+        default = (data_max + data_min) / 2
     return html.Div(
         [
             dbc.Label(label),
@@ -31,7 +32,7 @@ def create_slider(id: str, data_min: float, data_max: float, step: float,
                 min=data_min,
                 max=data_max,
                 step=step,
-                value=data_min,
+                value=default,
                 updatemode="mouseup",
                 tooltip={"placement": "bottom", "always_visible": True},
                 marks={data_min: str(data_min), data_max: str(data_max)},
@@ -129,7 +130,7 @@ def create_thresh_component() -> html.Div:
             html.Div(
                 id='thresh-slider_container',
                 children=[
-                    create_slider(id=f"thresh-percent-slider", data_min=0, data_max=100, step=1, label="Threshold Value (%)")
+                    create_slider(id=f"thresh-percent-slider", data_min=0, data_max=100, step=1, label="Threshold Value (%)", default=0)
                 ],
                 className="mt-2",
             ),
@@ -292,6 +293,7 @@ def create_data_component(n_mat: int) -> html.Div:
         data_min=0,
         step=1,
         label="Connectivity Matrix Index",
+        default=0,
     )
 
     # Label that shows either "No dataset loaded" or current dataset name

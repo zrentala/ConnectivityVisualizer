@@ -14,7 +14,7 @@ class GlobalAppState:
         self.app = Dash(__name__, external_stylesheets=[dbc.themes.CYBORG])
         
         # ---- Simulated data ----
-        cfg = {"n_elec": 20, "directed": False, "n_mat": 10}
+        cfg = {"n_elec": 20, "directed": True, "n_mat": 10}
         data = Simulation(cfg)
         
         chanlocs = pd.DataFrame(
@@ -27,7 +27,7 @@ class GlobalAppState:
         )
 
         brain_mesh = data.build_brain_mesh()
-        self.brain_data = BrainData(data.conn_matrices, chanlocs, brain_mesh)
+        self.brain_data = BrainData(data.conn_matrices, chanlocs, brain_mesh, directed=True)
         # print( self.brain_data)
         self.threshold = Threshold()
         self.viz = VizUIManager(self.brain_data, self.threshold)

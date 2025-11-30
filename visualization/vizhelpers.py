@@ -478,6 +478,8 @@ def compute_locs_2d_topo(sx: np.ndarray, sy: np.ndarray) -> np.ndarray:
 
     return np.column_stack([xs, ys])
 
+
+
 def _get_candidate_edges(edge_trace_idx, old_thresh_mask, new_thresh_mask, update_type, directed, n_nodes):
 
         ij_iter = _get_ij_iter(n_nodes=n_nodes, directed=directed)
