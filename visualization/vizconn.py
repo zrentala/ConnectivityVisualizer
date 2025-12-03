@@ -85,7 +85,7 @@ class HandlesNodes():
         self.update_locs(chanlocs)
 
         # caches
-        self._node_trace_idx = {}
+        self._node_trace_idx = -999
         self._edge_trace_idx = {}
         self._arrow_trace_idx = {}
         self._colorbar_trace_idx = -999
@@ -111,7 +111,11 @@ class HandlesNodes():
         pass
 
     @abstractmethod
-    def _build_base_trace(self, labels):
+    def _build_base_trace(self, fig):
+        pass
+
+    @abstractmethod
+    def _build_node_trace(self, fig, labels):
         pass
 
     @abstractmethod
@@ -262,30 +266,8 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         self.locs = helpers.compute_locs_2d_topo(sx, sy)
 
 
-    def _build_base_traces(self, labels) -> List[go.Scattergl]:
-            """Head outline, nose, and node markers (no edges)."""
-            theta = np.linspace(0, 2 * np.pi, 256)
+    def _build_node_trace(self, fig, labels):
             x, y = self.locs[:, 0], self.locs[:, 1]
-
-            head = go.Scattergl(
-                x=np.cos(theta),
-                y=np.sin(theta),
-                mode="lines",
-                line=dict(color="black", width=2),
-                hoverinfo="skip",
-                name="Head",
-            )
-
-            nose = go.Scattergl(
-                x=[0.10, 0.00, -0.10],
-                y=[1.00, 1.10, 1.00],
-                mode="lines",
-                line=dict(color="black", width=2),
-                name="Nose",
-                hoverinfo="skip",
-                showlegend=False,
-            )
-
             nodes = go.Scattergl(
                 x=x,
                 y=y,
@@ -302,8 +284,36 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                 hoverinfo="text",
                 name="Electrodes",
             )
+            fig.add_trace(nodes)
+            self._node_trace_idx = len(fig.data) - 1
 
-            return [head, nose, nodes]
+    def _build_base_trace(self, fig):
+            """Head outline, nose, and node markers (no edges)."""
+            theta = np.linspace(0, 2 * np.pi, 256)
+            
+
+            head = go.Scattergl(
+                x=np.cos(theta),
+                y=np.sin(theta),
+                mode="lines",
+                line=dict(color="black", width=2),
+                hoverinfo="skip",
+                name="Head",
+            )
+
+            fig.add_trace(head)
+
+            nose = go.Scattergl(
+                x=[0.10, 0.00, -0.10],
+                y=[1.00, 1.10, 1.00],
+                mode="lines",
+                line=dict(color="black", width=2),
+                name="Nose",
+                hoverinfo="skip",
+                showlegend=False,
+            )
+
+            fig.add_trace(head)
     
     def _get_edge_path(self, i: int, j: int, use_arcs: bool) -> np.ndarray:
         p0 = self.locs[i]
@@ -409,7 +419,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
         fig = go.Figure()
-        base = self._build_base_traces(labels)
+        self._build_base_trace(fig)
         # The node trace is always the *last* one in base:
         
         
@@ -426,10 +436,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         ### CACHE EDGES (i, j) --> idx
 
         # self._edge_trace_idx = helpers._create_cache_edges(labels, fig)
-        nodes_trace = base[-1]
-        for tr in base:
-            fig.add_trace(tr)
-        self._node_trace_idx = fig.data.index(nodes_trace)
+        self._build_node_trace(fig, labels)
 
         ### CREATE COLOR BAR
         colorbar_trace_idx = helpers._add_colorbar_trace(fig=fig, colorscale=colorscale,zmin=zmin,zmax=zmax, viz_type=VizType.FIG2D)
@@ -497,13 +504,6 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                 ### GET EDGE's CONN and MASK (BOOL)
                 w = C[i, j]
                 m = new_thresh_mask[i, j]
-
-                ### TRIED GETTING RID OF CHECK OF IDX
-                # if idx is None:
-                #     continue  # should not happen if build/setup is consistent
-
-                ### GET TRACE
-                
                 trace = fig.data[idx]
                 
                 ### HIDE IF MASK == FALSE
@@ -576,34 +576,23 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         # 2D normalized topography
         self.locs = helpers.compute_locs_3d(sx=sx, sy=sy, sz=sz)
 
-    # def _build_base_traces(self, labels, brain_mesh: Optional[pv.PolyData]) -> List[go.Scattergl]:
-    #     if brain_mesh is not None and pv is not None and brain_mesh.n_points > 0:
-    #         pts = np.asarray(brain_mesh.points)
-    #         faces_np = np.asarray(brain_mesh.faces)
-    #         faces = faces_np.reshape(-1, 4)[:, 1:4].astype(int)
-    #         head = go.Mesh3d(
-    #             x=pts[:, 0], y=pts[:, 1], z=pts[:, 2],
-    #             i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
-    #             color="lightgray", opacity=0.25, flatshading=True,
-    #             lighting=dict(ambient=0.6, diffuse=0.6, specular=0.1),
-    #             name="Brain"
-    #         )
+    def _build_node_trace(self, fig, labels):
+        # ========= NODES =========
+        x, y, z = self.locs[:, 0], self.locs[:, 1], self.locs[:, 2]
+        fig.add_trace(go.Scatter3d(
+            x=x, y=y, z=z,
+            mode="markers+text",
+            text=labels,
+            textposition="top center",
+            textfont=dict(size=10, color="black"),
+            marker=dict(size=self.node_size, color=self.node_fill),
+            name="Electrodes"
+        ))
+        self._node_trace_idx = len(fig.data) - 1
+        print(self._node_trace_idx)
 
-    #     x, y, z = self.locs[:, 0], self.locs[:, 1], self.locs[:, 2]
-    #     nodes = go.Scatter3d(
-    #         x=x, y=y, z=z,
-    #         mode="markers+text",
-    #         text=labels,
-    #         # opacity=self.node_opacity,
-    #         textposition="top center",
-    #         textfont=dict(size=10, color="black"),
-    #         marker=dict(size=self.node_size),
-    #         name="Electrodes"
-    #     )
-    #     return [head, nodes]
-    def _build_base_traces(self, labels, brain_mesh: Optional[pv.PolyData]) -> List[go.Scatter3d]:
-        traces = []
 
+    def _build_base_trace(self, fig, brain_mesh: Optional[pv.PolyData]):
         if brain_mesh is not None and pv is not None and brain_mesh.n_points > 0:
             pts = np.asarray(brain_mesh.points)
             faces_np = np.asarray(brain_mesh.faces)
@@ -621,7 +610,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                 lf_remap = np.vectorize(remap.get)(lf)
 
                 left_pts = pts[left_mask]
-                traces.append(go.Mesh3d(
+                fig.add_trace(go.Mesh3d(
                     x=left_pts[:, 0], 
                     y=left_pts[:, 1], 
                     z=left_pts[:, 2],
@@ -645,7 +634,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                 rf_remap = np.vectorize(remap.get)(rf)
 
                 right_pts = pts[right_mask]
-                traces.append(go.Mesh3d(
+                fig.add_trace(go.Mesh3d(
                     x=right_pts[:, 0], 
                     y=right_pts[:, 1], 
                     z=right_pts[:, 2],
@@ -656,21 +645,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                     opacity=self.brain_mesh_opacity, 
                     name="Brain_R"
                 ))
-
-        # ========= NODES =========
-        x, y, z = self.locs[:, 0], self.locs[:, 1], self.locs[:, 2]
-        nodes = go.Scatter3d(
-            x=x, y=y, z=z,
-            mode="markers+text",
-            text=labels,
-            textposition="top center",
-            textfont=dict(size=10, color="black"),
-            marker=dict(size=self.node_size, color=self.node_fill),
-            name="Electrodes"
-        )
-        traces.append(nodes)
-        return traces
-
+                self._mesh_trace_idx["right"] = len(fig.data) - 1
 
     
     def toggle_hemisphere_visibility(self, fig: go.Figure, left=None, right=None):
@@ -690,12 +665,9 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
 
         mesh_l_trace = fig.data[self._mesh_trace_idx["left"]]
         mesh_r_trace = fig.data[self._mesh_trace_idx["right"]]
-        mesh_l_trace.visibile = self.show_hemi_left
+        mesh_l_trace.visible = self.show_hemi_left
         mesh_r_trace.visible = self.show_hemi_right
     
-
-
-
 
     ### NEED TO FIX INPUTS
     def _get_edge_path(self, i: int, j: int, C: np.ndarray, m: int = 60) -> np.ndarray:
@@ -846,7 +818,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
         fig = go.Figure()
-        base = self._build_base_traces(labels, brain_mesh=brain_mesh)
+        self._build_base_trace(fig=fig, brain_mesh=brain_mesh)
         # The node trace is always the *last* one in base:
         
 
@@ -854,15 +826,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         self._build_edge_traces(C=C, labels=labels,
             directed=directed, color_scale_info=color_scale_info, fig=fig
         )
-        # for tr in edge_traces:
-        #     fig.add_trace(tr)
-
-        ### CACHE EDGES (i, j) --> idx
-        # self._edge_trace_idx = helpers._create_cache_edges(labels, fig)
-        nodes_trace = base[-1]
-        for tr in base:
-            fig.add_trace(tr)
-        self._node_trace_idx = fig.data.index(nodes_trace)
+        self._build_node_trace(fig=fig, labels=labels)
 
         ### CREATE COLOR BAR
         colorbar_trace_idx = helpers._add_colorbar_trace(fig=fig, colorscale=colorscale,zmin=zmin,zmax=zmax, viz_type=VizType.FIG3D)
@@ -917,7 +881,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
 
             print("hemisphere viz")
             if update_type == UpdateType.NODES:
-
+                print(self._node_trace_idx)
                 node_trace = fig.data[self._node_trace_idx]
 
                 helpers._update_node_trace_all(
