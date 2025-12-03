@@ -63,6 +63,12 @@ class HandlesGraphs():
     def __init__(self):
         pass
 
+    # top X efficiency
+    # Top X in degree out degree bidirectional
+    # TOp X node connection strenghts
+    # Top x modularity
+    # groups/partition
+
 class HandlesNodes(): 
     def __init__(
         self,
@@ -248,6 +254,25 @@ class ConnectivityViewStats(ConnectivityView):
             default_pos_color=default_pos_color,
             default_neg_color=default_neg_color,
         )
+
+    # Number of Nodes
+    # Number of Edges total and visible
+    # average connectivity total and visible
+    # Median
+    # sum
+    # IQR
+    # outliers
+    # connectivity range
+    # locations of electrodes
+    # directed or undirected
+    # Title
+    # Threshold: alpha, beta
+    # Graph:
+    # connection density
+    # node connection strengths
+    # global and local efficiency
+    # In degree out degree
+    # modularity
 
 
     def build_figure(
