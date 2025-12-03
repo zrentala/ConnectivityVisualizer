@@ -47,6 +47,7 @@ class VizUIManager:
         color_min: float = 0.0,
         color_max: float = 1.0,
         viz_type: VizType = VizType.FIG2D,
+        show_title: bool = True
     ) -> None:
 
         # -----------------------
@@ -57,6 +58,7 @@ class VizUIManager:
         self.color_min = color_min
         self.color_max = color_max
         self.viz_type = viz_type
+        self.show_title = show_title
 
         # Internal cached threshold mask
         self._mask_cache = None
@@ -100,12 +102,15 @@ class VizUIManager:
             brain_data.conn_mat, self.conn_idx
         )
 
+        title = brain_data.mat_names[self.conn_idx]
+
         if self.viz_type == VizType.FIG2D:
             self.viz_dict[self.viz_type].build_figure(
                 C=C,
                 labels=brain_data.labels,
                 directed=brain_data.directed,
-                color_scale_info= color_scale_info
+                color_scale_info= color_scale_info,
+                title=title
             )
         elif self.viz_type == VizType.FIG3D:
             self.viz_dict[self.viz_type].build_figure(
@@ -113,14 +118,16 @@ class VizUIManager:
                 labels=brain_data.labels,
                 directed=brain_data.directed,
                 color_scale_info= color_scale_info,
-                brain_data=brain_data.brain_mesh
+                brain_data=brain_data.brain_mesh,
+                title=title
             )
         elif self.viz_type == VizType.FIGHEATMAP:
             self.viz_dict[self.viz_type].build_figure(
                 C=C,
                 labels=brain_data.labels,
                 directed=brain_data.directed,
-                color_scale_info= color_scale_info
+                color_scale_info= color_scale_info,
+                title=title
             )
 
     # ------------------------------------------------------------------
@@ -135,6 +142,7 @@ class VizUIManager:
         scale, data_min, data_max, zmin, zmax = helpers._get_scale_and_range(C, color_min=self.color_min, color_max=self.color_max)
         color_scale_info = (scale, data_min, data_max, zmin, zmax, self.colorscale)
         
+        title = brain_data.mat_names[self.conn_idx] if self.show_title else None
 
         if self.viz_type == VizType.FIG2D:
             self.viz_dict[self.viz_type].update_figure(
@@ -144,7 +152,8 @@ class VizUIManager:
             update_type=update_type,
             new_thresh_mask=new_mask,
             old_thresh_mask=old_mask,
-            color_scale_info=color_scale_info
+            color_scale_info=color_scale_info,
+            title=title
         )
         elif self.viz_type == VizType.FIG3D:
             self.viz_dict[self.viz_type].update_figure(
@@ -155,7 +164,8 @@ class VizUIManager:
             new_thresh_mask=new_mask,
             old_thresh_mask=old_mask,
             color_scale_info=color_scale_info,
-            brain_mesh=brain_data.brain_mesh
+            brain_mesh=brain_data.brain_mesh,
+            title=title
         )
         elif self.viz_type == VizType.FIGHEATMAP:
             self.viz_dict[self.viz_type].update_figure(
@@ -165,7 +175,8 @@ class VizUIManager:
             update_type=update_type,
             new_thresh_mask=new_mask,
             old_thresh_mask=old_mask,
-            color_scale_info=color_scale_info
+            color_scale_info=color_scale_info,
+            title=title
         )
 
     # ------------------------------------------------------------------

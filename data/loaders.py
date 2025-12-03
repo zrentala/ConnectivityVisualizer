@@ -15,6 +15,7 @@ from dash import no_update
 from data.simulation import Simulation
 from utils.braindata import BrainData
 from utils.global_app_state import GlobalAppState
+from visualization.vizuimanager import VizUIManager
 
 
 # You can move / edit these presets here instead of in callbacks.py
@@ -172,7 +173,7 @@ class DataLoader:
 
         brain_data = self._brain_data_from_uploaded_array(conn)
         self.global_state.brain_data = brain_data
-        self.global_state.viz = ConnectivityVisualizer(self.global_state.brain_data, self.global_state.threshold)
+        self.global_state.viz = VizUIManager(self.global_state.brain_data, self.global_state.threshold)
 
         slider = self._slider_state_from_brain_data(brain_data, current_value=0)
         ds_name = filename or "Uploaded dataset"
@@ -196,7 +197,7 @@ class DataLoader:
 
         brain_data = self._brain_data_from_sim(cfg)
         self.global_state.brain_data = brain_data
-        self.global_state.viz = ConnectivityVisualizer(self.global_state.brain_data, self.global_state.threshold)
+        self.global_state.viz = VizUIManager(self.global_state.brain_data, self.global_state.threshold)
 
         slider = self._slider_state_from_brain_data(brain_data, current_value=0)
         ds_name = f"Preset: {preset_key}"
@@ -224,7 +225,7 @@ class DataLoader:
         cfg = {"n_elec": n_elec, "directed": directed_flag, "n_mat": n_mat}
         brain_data = self._brain_data_from_sim(cfg)
         self.global_state.brain_data = brain_data
-        self.global_state.viz = ConnectivityVisualizer(self.global_state.brain_data, self.global_state.threshold)
+        self.global_state.viz = VizUIManager(self.global_state.brain_data, self.global_state.threshold)
 
         slider = self._slider_state_from_brain_data(brain_data, current_value=0)
         ds_name = f"Simulated (n={n_elec}, mats={n_mat}, directed={directed_flag})"

@@ -37,6 +37,7 @@ class ConnectivityView(ABC):
         labels,
         directed: bool,
         color_scale_info,
+        title: Optional[str]
     ) -> go.Figure:
         pass
     @abstractmethod
@@ -49,6 +50,7 @@ class ConnectivityView(ABC):
         color_scale_info,
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
+        title: Optional[str]
     ) -> go.Figure:
         pass
 
@@ -66,7 +68,7 @@ class HandlesNodes():
         self,
         chanlocs,
         node_size: float = 28.0,
-        # node_opacity: float = 0.75,
+        node_opacity: float = 0.75,
         edge_width_range: Tuple[float]=(0.4, 5),
         edge_opacity: float = 0.5,
         arc_radius: float=0.5,
@@ -78,6 +80,7 @@ class HandlesNodes():
         # self.node_opacity = node_opacity
         self.edge_width_range = edge_width_range
         self.edge_opacity = edge_opacity
+        self.node_opacity = node_opacity
         self.node_fill = node_fill
         self.node_edge = node_edge
         self.arc_radius = arc_radius
@@ -89,6 +92,15 @@ class HandlesNodes():
         self._edge_trace_idx = {}
         self._arrow_trace_idx = {}
         self._colorbar_trace_idx = -999
+
+    def update_attribute(self, viz_updates):
+        self.node_size = viz_updates["node_size"]
+        self.edge_width_range = viz_updates["edge_width_range"]
+        self.node_opacity = viz_updates["node_opacity"]
+        self.edge_opacity = viz_updates["edge_opacity"]
+        self.arc_radius = viz_updates["arc_radius"]
+        print(f"{self.arc_radius=}")
+        print(f"{self.node_opacity=}")
 
 
     @abstractmethod
@@ -141,6 +153,7 @@ class ConnectivityViewHeatmap(ConnectivityView):
         labels,
         directed: bool,
         color_scale_info,
+        title: Optional[str]
     ):
         fig = go.Figure()
 
@@ -182,6 +195,7 @@ class ConnectivityViewHeatmap(ConnectivityView):
             plot_bgcolor="white",
         )
 
+        helpers._update_title(fig=fig, title=title)
         self.fig = fig
         return fig
 
@@ -194,6 +208,7 @@ class ConnectivityViewHeatmap(ConnectivityView):
         color_scale_info,
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
+        title: Optional[str]
     ) -> go.Figure:
         fig = self.fig
         
@@ -205,6 +220,7 @@ class ConnectivityViewHeatmap(ConnectivityView):
                 labels=labels,
                 directed=directed,
                 color_scale_info=color_scale_info,
+                title=title
             )
 
         fig.update_traces(
@@ -215,6 +231,7 @@ class ConnectivityViewHeatmap(ConnectivityView):
             selector=dict(name="main"),
         )
 
+        helpers._update_title(fig=fig, title=title)
         self.fig = fig
         return self.fig
     
@@ -227,7 +244,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         self,
         chanlocs,
         node_size: float = 28,
-        # node_opacity: float=0.75,
+        node_opacity: float=0.75,
         edge_width_range: Tuple[float] = (0.4, 5),
         edge_opacity: float=0.5,
         default_pos_color: str = "red",
@@ -241,7 +258,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             self,
             chanlocs=chanlocs,
             node_size=node_size,
-            # node_opacity=node_opacity,
+            node_opacity=node_opacity,
             edge_width_range=edge_width_range,
             edge_opacity=edge_opacity,
             node_fill=node_fill,
@@ -249,13 +266,8 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         )
        
     def update_attributes(self, viz_updates):
-        print(f"{self.node_size=}")
-        self.node_size = viz_updates["node_size_2d"]
-        print(f"{self.node_size=}")
-        self.edge_width_range = viz_updates["edge_width_range_2d"]
-        # self.node_opacity = viz_updates["node_opacity_2d"]
-        self.edge_opacity = viz_updates["edge_opacity_2d"]
-        # print(f"{self.node_opacity=}, {self.edge_opacity=}")
+        HandlesNodes.update_attribute(self, viz_updates)
+
         # self.update_locs(viz_updates["chanlocs"])
 
     def update_locs(self, chanlocs):
@@ -279,7 +291,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                     color=self.node_fill,
                     line=dict(color=self.node_edge, width=2),
                 ),
-                # opacity=self.node_opacity,
+                opacity=self.node_opacity,
                 hovertext=labels,
                 hoverinfo="text",
                 name="Electrodes",
@@ -313,7 +325,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                 showlegend=False,
             )
 
-            fig.add_trace(head)
+            fig.add_trace(nose)
     
     def _get_edge_path(self, i: int, j: int, use_arcs: bool) -> np.ndarray:
         p0 = self.locs[i]
@@ -414,8 +426,8 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         labels,
         directed: bool,
         color_scale_info,
+        title: Optional[str]
     ) -> go.Figure:
-        print("built 2d")
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
         fig = go.Figure()
@@ -456,6 +468,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             plot_bgcolor="white",
         )
 
+        helpers._update_title(fig=fig, title=title)
         self.fig = fig
         return fig
 
@@ -467,9 +480,9 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         color_scale_info,
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
+        title: Optional[str]
     ) -> go.Figure:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
-        print("updated 2d")
         fig = self.fig
 
         if fig is None:
@@ -496,9 +509,8 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                 self.fig = fig
                 return fig
 
-
             traces_list = helpers._get_candidate_edges(edge_trace_idx=self._edge_trace_idx, old_thresh_mask=old_thresh_mask, new_thresh_mask=new_thresh_mask, update_type=update_type, directed=directed, n_nodes=C.shape[0])
-
+            # print(traces_list)
             for (i, j), idx in traces_list:
                 
                 ### GET EDGE's CONN and MASK (BOOL)
@@ -511,7 +523,9 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                     ann_idx = self._arrow_trace_idx.get((i,j), None)
                     arrow_ann = fig.layout.annotations[ann_idx]
                     arrow_ann.visible = False  # fully hide
-                if not m:
+                    trace.visible = False  # fully hide
+                    continue
+                if not directed and not m:
                     # trace.opacity = 0.0
                     # trace.hoverinfo = "skip"
                     # trace.text = ""
@@ -524,12 +538,13 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
 
                 ### GET WIDTH
                 width = helpers._get_edge_width(edge_weight=w, scale=scale, width_range=self.edge_width_range)
-                # print(f"{width=}")
                 ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE THIS AN UPDATEABLE VALUE
                 helpers._update_edge_trace(trace=trace, edge_weight=w, color=color, width=width, opacity=self.edge_opacity, label1=labels[i], label2=labels[j])
 
             # UPDATE COLOR BAR (MAKE THIS FUNCTION)
             helpers._update_colorbar(fig, self._colorbar_trace_idx, colorscale, zmin, zmax)
+
+        helpers._update_title(fig=fig, title=title)
         self.fig = fig
         return fig
 
@@ -539,7 +554,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         self,
         chanlocs,
         node_size: float = 28.0,
-        # node_opacity: float=0.75,
+        node_opacity: float=0.75,
         edge_width_range: Tuple[float] = (0.4, 5),
         edge_opacity: float=0.5,
         default_pos_color: str = "red",
@@ -556,7 +571,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         HandlesNodes.__init__(self,
                               chanlocs=chanlocs, 
                          node_size=node_size, 
-                        #  node_opacity=node_opacity,
+                         node_opacity=node_opacity,
                          edge_width_range=edge_width_range,
                          edge_opacity=edge_opacity,
                          node_fill=node_fill,
@@ -589,7 +604,6 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
             name="Electrodes"
         ))
         self._node_trace_idx = len(fig.data) - 1
-        print(self._node_trace_idx)
 
 
     def _build_base_trace(self, fig, brain_mesh: Optional[pv.PolyData]):
@@ -651,7 +665,6 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
     def toggle_hemisphere_visibility(self, fig: go.Figure, left=None, right=None):
 
         # Coerce to actual booleans (fixes list inputs)
-        print(f"{left=}")
         if isinstance(left, list):
             left = left[0]
         if isinstance(right, list):
@@ -813,6 +826,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         labels,
         directed: bool,
         color_scale_info,
+        title: Optional[str],
         brain_mesh: Optional[pv.PolyData]
     ) -> go.Figure:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
@@ -845,7 +859,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
             showlegend=False,
             plot_bgcolor="white",
         )
-
+        helpers._update_title(fig=fig, title=title)
         self.fig = fig
         return fig
 
@@ -855,9 +869,10 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         directed: bool,
         update_type:UpdateType,
         color_scale_info,
+        title: Optional[str],
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
-        brain_mesh: Optional[pv.PolyData]
+        brain_mesh: Optional[pv.PolyData],
     ) -> go.Figure:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         
@@ -869,7 +884,8 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                 labels=labels,
                 directed=directed,
                 color_scale_info=color_scale_info,
-                brain_mesh=brain_mesh
+                brain_mesh=brain_mesh,
+                title=title
             )
 
         with fig.batch_update():
@@ -879,9 +895,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
             mesh_l_trace.opacity = self.brain_mesh_opacity
             mesh_r_trace.opacity = self.brain_mesh_opacity
 
-            print("hemisphere viz")
             if update_type == UpdateType.NODES:
-                print(self._node_trace_idx)
                 node_trace = fig.data[self._node_trace_idx]
 
                 helpers._update_node_trace_all(
@@ -889,13 +903,14 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                     labels=labels,
                     size=self.node_size,
                     color=self.node_fill,
-                    # opacity=self.node_opacity
+                    opacity=self.node_opacity
                 )
 
                 self.fig = fig
                 return fig
-            traces_list = helpers._get_candidate_edges(edge_trace_idx=self._edge_trace_idx, old_thresh_mask=old_thresh_mask, new_thresh_mask=new_thresh_mask, update_type=update_type, directed=directed, n_nodes=C.shape[0])
 
+            traces_list = helpers._get_candidate_edges(edge_trace_idx=self._edge_trace_idx, old_thresh_mask=old_thresh_mask, new_thresh_mask=new_thresh_mask, update_type=update_type, directed=directed, n_nodes=C.shape[0])
+            
             for (i, j), idx in traces_list:
                 
                 ### GET EDGE's CONN and MASK (BOOL)
@@ -932,14 +947,14 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
 
             # UPDATE COLOR BAR (MAKE THIS FUNCTION)
             helpers._update_colorbar(fig, self._colorbar_trace_idx, colorscale, zmin, zmax)
+
+        
+        helpers._update_title(fig=fig, title=title)
         self.fig = fig
         return fig
 
     def update_attributes(self, viz_updates):
-        self.node_size = viz_updates["node_size_3d"]
-        # self.node_opacity = viz_updates["node_opacity_3d"]
-        self.edge_opacity = viz_updates["edge_opacity_3d"]
-        self.edge_width_range = viz_updates["edge_width_range_3d"]
+        HandlesNodes.update_attribute(self, viz_updates)
         self.show_hemi_left = viz_updates["show_hemi_left_3d"]
         self.show_hemi_right = viz_updates["show_hemi_right_3d"]
         self.brain_mesh_opacity = viz_updates["brain_mesh_opacity_3d"]

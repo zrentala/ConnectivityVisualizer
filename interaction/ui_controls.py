@@ -143,33 +143,38 @@ def create_thresh_component() -> html.Div:
         className=container_class,
     )
 
+def create_node_options():
+    node_size_slider = create_slider(id="viz-node-node_size-slider", data_min=5, data_max=50, step=1, label="Node Size")
+    node_opacity_slider = create_slider(id="viz-node-node_opacity-slider", data_min=0, data_max=1, step=0.01, label="Node Opacity (%)")
+
+    edge_width_range = create_range_slider(id="viz-node-edge_width-range_slider", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0], label="Edge Width Size")
+    edge_opacity_slider = create_slider(id="viz-node-edge_opacity-slider", data_min=0, data_max=1, step=0.01, label="Edge Opacity (%)")
+    arc_radius_slider = create_slider(id="viz-node-arc_radius-slider", data_min=0, data_max=40, step=1, label="Arc Radius")
+    return html.Div(
+        id="viz-node-container",
+        children=[
+            html.Hr(),
+            html.H5("Graph Visualization Options"),
+            node_size_slider,
+            node_opacity_slider,
+            edge_width_range,
+            edge_opacity_slider,
+            arc_radius_slider
+        ],
+        style={"display": "none"},
+    )
 
 def create_2d_options() -> html.Div:
-    node_size_slider = create_slider(id="viz-2d-node_size-slider", data_min=5, data_max=50, step=1, label="Node Size")
-    node_opacity_slider = create_slider(id="viz-2d-node_opacity-slider", data_min=0, data_max=1, step=0.01, label="Node Opacity (%)")
-
-    edge_width_range = create_range_slider(id="viz-2d-edge_width-range_slider", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0], label="Edge Width Size")
-    edge_opacity_slider = create_slider(id="viz-2d-edge_opacity-slider", data_min=0, data_max=1, step=0.01, label="Edge Opacity (%)")
     return html.Div(
         id="viz-2d-container",
         children=[
             html.Hr(),
             html.H5("2D Visualization Options"),
-            node_size_slider,
-            # node_opacity_slider,
-            edge_width_range,
-            edge_opacity_slider
         ],
         style={"display": "none"},
     )
 
 def create_3d_options() -> html.Div:
-    node_size_slider = create_slider(id="viz-3d-node_size-slider", data_min=1, data_max=50, step=1, label="Node Size")
-    node_opacity_slider = create_slider(id="viz-3d-node_opacity-slider", data_min=0, data_max=1, step=0.01, label="Node Opacity (%)")
-
-    edge_opacity_slider = create_slider(id="viz-3d-edge_opacity-slider", data_min=0, data_max=1, step=0.01, label="Edge Opacity (%)")
-    edge_width_range = create_range_slider("viz-3d-edge_width-range_slider", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0],label="Edge Width Size")
-
     brain_mesh_opacity_slider = create_slider(id="viz-3d-brain_mesh_opacity-slider", data_min=0, data_max=1, step=0.01, label="Brain Mesh Opacity (%)")
 
     hemisphere_row = dbc.Row(
@@ -200,11 +205,6 @@ def create_3d_options() -> html.Div:
         children=[
             html.Hr(),
             html.H5("3D Visualization Options"),
-            node_size_slider,
-            # node_opacity_slider,
-            edge_width_range,
-            edge_opacity_slider,
-            html.Br(),
             hemisphere_row,
             brain_mesh_opacity_slider
         ],
@@ -261,6 +261,7 @@ def create_viz_controls(n_mat: int) -> html.Div:
     color_range = create_range_slider(id="viz-color-range_slider", data_max=1, data_min=0, step=0.01, default=[0.0,1.0], label="Color Range")
 
     # 2D/3D option blocks
+    options_node = create_node_options()
     options_2d = create_2d_options()
     options_3d = create_3d_options()
 
@@ -269,7 +270,8 @@ def create_viz_controls(n_mat: int) -> html.Div:
             viz_type_dropdown,
             color_map_dropdown,
             color_range,
-            options_2d,
+            options_node,
+            # options_2d,
             options_3d,
         ],
         fluid=True,

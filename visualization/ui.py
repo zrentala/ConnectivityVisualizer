@@ -20,7 +20,7 @@ def create_layout(n_mat, initial_fig):
             viz_controls,
             html.H4("Threshold Controls"),
             threshold_comp,
-            html.H4("Graph Controls"),
+            # html.H4("Graph Controls"),
         ],
         className="bg-light p-3 rounded shadow-sm",
         style={"height": "100%", "overflowY": "auto"},

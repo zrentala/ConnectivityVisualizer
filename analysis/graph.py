@@ -167,6 +167,10 @@ def graph_summary(ga: GraphAnalysis):
     print(f"  Local Efficiency: {l_eff:.4f}")
     print(f"  Modularity: {mod:.4f}")
 
+# need to implement threhsolding
+# identify most efficient/node conn strength/modularity of each node
+# identify most _ of each edge
+
 
 # import networkx as nx
 # import numpy as np

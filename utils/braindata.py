@@ -17,11 +17,11 @@ class BrainData:
     chanlocs: pd.DataFrame
     brain_mesh: pv.PolyData
     directed: bool = False
+    mat_names: np.ndarray = None
 
     # Derived fields populated post-init
     n_nodes: int = field(init=False)
     labels: np.ndarray = field(init=False)
-
     def __post_init__(self):
         if self.conn_mat.ndim == 3:
             n_mat, n1, n2 = self.conn_mat.shape
@@ -45,3 +45,6 @@ class BrainData:
 
         self.n_nodes = n_nodes
         self.labels = self.chanlocs["label"].values
+        if self.mat_names is None:
+           default_mat_names = [f"{i}th Functional Connectivty Matrix" for i in range(self.n_nodes)]
+           self.mat_names = np.array(default_mat_names, dtype=str)

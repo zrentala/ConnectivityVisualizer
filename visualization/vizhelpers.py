@@ -170,6 +170,7 @@ def _quad_bezier(p0: np.ndarray, p1: np.ndarray, curvature: float = 0.25, m: int
     if L < 1e-12:
         return np.repeat(p0[None, :], m, axis=0)
     u = d / L
+    # print(f"{curvature=}")
     perp = np.array([-u[1], u[0]])
     c = (p0 + p1) / 2.0 + curvature * L * perp
     t = np.linspace(0, 1, m)[:, None]
@@ -273,7 +274,8 @@ def _update_colorbar(fig, colorbar_idx, colorscale, zmin, zmax):
     tr.marker.cmax = zmax
     tr.marker.color = [zmin, zmax]
 
-def _update_edge_trace(trace, edge_weight, color, width, opacity, label1, label2):     
+def _update_edge_trace(trace, edge_weight, color, width, opacity, label1, label2):    
+    trace.visible = True 
     trace.line.color = color
     trace.line.width = width
     trace.opacity = opacity
@@ -285,7 +287,7 @@ def _update_node_trace_all(
     labels=None,
     size=None,
     color=None,
-    # opacity=None,
+    opacity=None,
 ):
     """
     Update all nodes in the node trace.
@@ -299,8 +301,8 @@ def _update_node_trace_all(
     if color is not None:
         trace.marker.color = [color] * n
 
-    # if opacity is not None:
-    #     trace.opacity = opacity
+    if opacity is not None:
+        trace.opacity = opacity
 
     # Update labels
     if labels is not None:
@@ -493,7 +495,7 @@ def _get_candidate_edges(edge_trace_idx, old_thresh_mask, new_thresh_mask, updat
                 if (i, j) in edge_trace_idx
             ]
 
-        # ---- COLOR ----, only get visible edges
+        # ---- VISIBLE ----, only get visible edges
         if update_type is UpdateType.VISIBLE:
             changed_edges = [
                 ((i, j), edge_trace_idx[(i, j)])
@@ -503,15 +505,33 @@ def _get_candidate_edges(edge_trace_idx, old_thresh_mask, new_thresh_mask, updat
         # ---- THRESHOLD ----, get edges which differ in their visibility between the old_thresh_mask and new_thresh_mask
         if update_type is UpdateType.THRESHOLD:
             diff = (old_thresh_mask != new_thresh_mask)
+            # print(diff)
             changed_edges = [
                 ((i, j), edge_trace_idx[(i, j)])
                 for (i, j) in ij_iter
                 if diff[i, j] and (i, j) in edge_trace_idx
             ]
+            # print(changed_edges)
+            
             
 
         print(f"Number edges: {len(changed_edges)}")
         return changed_edges
+
+
+def _update_title(fig: go.Figure, title: str=None):
+    if title is not None:
+        fig.update_layout(
+                title={
+                "text": title,
+                # "color": "black",
+                "y": 0.95,              # vertical position
+                "x": 0.5,               # centered
+                "xanchor": "center",
+                "yanchor": "top",
+                "font": dict(size=20)
+                }   
+            )
 
 VIZ_STR_TO_ENUM = {
     "2d": VizType.FIG2D,
