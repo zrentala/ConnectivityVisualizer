@@ -238,6 +238,59 @@ class ConnectivityViewHeatmap(ConnectivityView):
     def update_attributes(self, viz_updates):
         return
 
+class ConnectivityViewStats(ConnectivityView):
+    def __init__(
+        self,
+        default_pos_color: str = "red",
+        default_neg_color: str = "blue",
+    ):
+        super().__init__(
+            default_pos_color=default_pos_color,
+            default_neg_color=default_neg_color,
+        )
+
+
+    def build_figure(
+        self,
+        C: np.ndarray,
+        labels,
+        directed: bool,
+        color_scale_info,
+        title: Optional[str]
+    ):
+        fig = go.Figure()
+
+        # Color range: compute full-data min/max then map color_min/color_max (0..1) into that range
+        scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
+
+       
+
+        helpers._update_title(fig=fig, title=title)
+        self.fig = fig
+        return fig
+
+    def update_figure(
+        self,
+        C: np.ndarray,
+        labels, 
+        directed: bool,
+        update_type:UpdateType,
+        color_scale_info,
+        new_thresh_mask: Optional[np.ndarray],
+        old_thresh_mask: Optional[np.ndarray],
+        title: Optional[str]
+    ) -> go.Figure:
+        fig = self.fig
+        scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
+
+        helpers._update_title(fig=fig, title=title)
+
+        return self.fig
+    
+    def update_attributes(self, viz_updates):
+        return
+
+
 
 class ConnectivityView2D(ConnectivityView, HandlesNodes):
     def __init__(
