@@ -555,6 +555,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                 margin=dict(l=0, r=0, t=40, b=0),
                 showlegend=False,
                 plot_bgcolor="white",
+                
             )
 
             helpers._update_title(fig=fig, title=title)
