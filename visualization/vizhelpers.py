@@ -287,7 +287,7 @@ def _update_node_trace_all(
     labels=None,
     size=None,
     color=None,
-    opacity=None,
+    # opacity=None,
 ):
     """
     Update all nodes in the node trace.
@@ -301,12 +301,13 @@ def _update_node_trace_all(
     if color is not None:
         trace.marker.color = [color] * n
 
-    if opacity is not None:
-        trace.opacity = opacity
+    # if opacity is not None:
+    #     # print(f"updated opacity: {opacity}")
+    #     trace.opacity = opacity
 
     # Update labels
-    if labels is not None:
-        trace.text = labels
+    # if labels is not None:
+    #     trace.text = labels
 
 
 

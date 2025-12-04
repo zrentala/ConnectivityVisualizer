@@ -16,7 +16,7 @@ from data.simulation import Simulation
 from utils.braindata import BrainData
 from utils.global_app_state import GlobalAppState
 from visualization.vizuimanager import VizUIManager
-
+import mne
 
 # You can move / edit these presets here instead of in callbacks.py
 PRESET_CONFIGS: Dict[str, Dict[str, Any]] = {
@@ -65,14 +65,29 @@ class DataLoader:
 
     def _brain_data_from_sim(self, cfg: Dict[str, Any]) -> BrainData:
         sim = Simulation(cfg)
+        #### BIG ISSUE
+        montage = mne.channels.make_standard_montage("standard_alphabetic")
+        # Extract channel positions (in meters)
+        pos = montage.get_positions()["ch_pos"]  # dict: {label: [x,y,z]}
+        # print(pos)
+        # Convert into DataFrame
         chanlocs = pd.DataFrame(
             {
-                "label": [f"E{i}" for i in range(sim.n_elec)],
-                "x": sim.locations[:, 0] * 100,
-                "y": sim.locations[:, 1] * 100,
-                "z": sim.locations[:, 2] * 100,
+                "label": list(pos.keys()),
+                "x": [coord[0] * 1000 for coord in pos.values()],  # convert to cm to match your scale
+                "y": [coord[1]  * 1000 for coord in pos.values()],
+                "z": [coord[2] * 1000 for coord in pos.values()],
             }
         )
+        del montage
+        # chanlocs = pd.DataFrame(
+        #     {
+        #         "label": [f"E{i}" for i in range(sim.n_elec)],
+        #         "x": sim.locations[:, 0] * 100,
+        #         "y": sim.locations[:, 1] * 100,
+        #         "z": sim.locations[:, 2] * 100,
+        #     }
+        # )
         brain_mesh = sim.build_brain_mesh()
         return BrainData(sim.conn_matrices, chanlocs, brain_mesh, directed=sim.is_directed)
 
@@ -235,3 +250,30 @@ class DataLoader:
             extra={"cfg": cfg},
         )
         return meta, slider
+def load_channel_locations(path):
+    path = str(path).lower()
+
+    # 1) EEGLAB SET
+    if path.endswith(".set"):
+        raw = mne.io.read_raw_eeglab(path, preload=False)
+        return raw.get_montage()
+
+    # 2) BrainVision
+    if path.endswith(".vhdr"):
+        raw = mne.io.read_raw_brainvision(path, preload=False)
+        return raw.get_montage()
+
+    # 3) BioSemi / EDF / formats without coords → require montage
+    if path.endswith(".bdf") or path.endswith(".edf"):
+        raw = mne.io.read_raw(path, preload=False)
+        return raw.get_montage()
+
+    # 4) Direct montage files
+    if path.endswith((".ced", ".locs", ".elc", ".elp", ".sfp")):
+        return mne.channels.read_custom_montage(path)
+
+    # 5) CSV / TXT
+    if path.endswith(".csv") or path.endswith(".txt"):
+        return mne.channels.read_custom_montage(path)
+
+    raise ValueError(f"Unsupported channel location format: {path}")

@@ -144,19 +144,19 @@ def create_thresh_component() -> html.Div:
     )
 
 def create_node_options():
-    node_size_slider = create_slider(id="viz-node-node_size-slider", data_min=5, data_max=50, step=1, label="Node Size")
-    node_opacity_slider = create_slider(id="viz-node-node_opacity-slider", data_min=0, data_max=1, step=0.01, label="Node Opacity (%)")
+    node_size_slider = create_slider(id="viz-node-node_size-slider", data_min=15, data_max=40, step=1, label="Node Size")
+    # node_opacity_slider = create_slider(id="viz-node-node_opacity-slider", data_min=0, data_max=1, step=0.01, label="Node Opacity (%)")
 
     edge_width_range = create_range_slider(id="viz-node-edge_width-range_slider", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0], label="Edge Width Size")
     edge_opacity_slider = create_slider(id="viz-node-edge_opacity-slider", data_min=0, data_max=1, step=0.01, label="Edge Opacity (%)")
-    arc_radius_slider = create_slider(id="viz-node-arc_radius-slider", data_min=0, data_max=40, step=1, label="Arc Radius")
+    arc_radius_slider = create_slider(id="viz-node-arc_radius-slider", data_min=0, data_max=1, step=0.01, label="Arc Radius")
     return html.Div(
         id="viz-node-container",
         children=[
             html.Hr(),
             html.H5("Graph Visualization Options"),
             node_size_slider,
-            node_opacity_slider,
+            # node_opacity_slider,
             edge_width_range,
             edge_opacity_slider,
             arc_radius_slider
@@ -410,7 +410,7 @@ def create_data_component(n_mat: int) -> html.Div:
             ),
         ],
         id="data-modal",
-        is_open=False,
+        is_open=True,
         centered=True,
         backdrop="static",
     )
@@ -421,7 +421,8 @@ def create_data_component(n_mat: int) -> html.Div:
         id="data-store",
         data={
             "name": None,
-            "source": None,  # "simulated", "uploaded", "preset"
+            "source": None,
+            # "ready": False
         },
     )
 

@@ -74,7 +74,7 @@ class HandlesNodes():
         self,
         chanlocs,
         node_size: float = 28.0,
-        node_opacity: float = 0.75,
+        # node_opacity: float = 0.75,
         edge_width_range: Tuple[float]=(0.4, 5),
         edge_opacity: float = 0.5,
         arc_radius: float=0.5,
@@ -86,7 +86,7 @@ class HandlesNodes():
         # self.node_opacity = node_opacity
         self.edge_width_range = edge_width_range
         self.edge_opacity = edge_opacity
-        self.node_opacity = node_opacity
+        # self.node_opacity = node_opacity
         self.node_fill = node_fill
         self.node_edge = node_edge
         self.arc_radius = arc_radius
@@ -102,11 +102,11 @@ class HandlesNodes():
     def update_attribute(self, viz_updates):
         self.node_size = viz_updates["node_size"]
         self.edge_width_range = viz_updates["edge_width_range"]
-        self.node_opacity = viz_updates["node_opacity"]
+        # self.node_opacity = viz_updates["node_opacity"]
         self.edge_opacity = viz_updates["edge_opacity"]
         self.arc_radius = viz_updates["arc_radius"]
-        print(f"{self.arc_radius=}")
-        print(f"{self.node_opacity=}")
+        # print(f"{self.arc_radius=}")
+        # print(f"{self.node_opacity=}")
 
 
     @abstractmethod
@@ -322,7 +322,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         self,
         chanlocs,
         node_size: float = 28,
-        node_opacity: float=0.75,
+        # node_opacity: float=0.75,
         edge_width_range: Tuple[float] = (0.4, 5),
         edge_opacity: float=0.5,
         default_pos_color: str = "red",
@@ -336,7 +336,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             self,
             chanlocs=chanlocs,
             node_size=node_size,
-            node_opacity=node_opacity,
+            # node_opacity=node_opacity,
             edge_width_range=edge_width_range,
             edge_opacity=edge_opacity,
             node_fill=node_fill,
@@ -357,25 +357,33 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
 
 
     def _build_node_trace(self, fig, labels):
-            x, y = self.locs[:, 0], self.locs[:, 1]
-            nodes = go.Scattergl(
-                x=x,
-                y=y,
-                mode="markers+text",
-                text=labels,
-                textposition="middle center",
-                marker=dict(
-                    size=self.node_size,
-                    color=self.node_fill,
-                    line=dict(color=self.node_edge, width=2),
-                ),
-                opacity=self.node_opacity,
-                hovertext=labels,
-                hoverinfo="text",
-                name="Electrodes",
-            )
-            fig.add_trace(nodes)
-            self._node_trace_idx = len(fig.data) - 1
+        x, y = self.locs[:, 0], self.locs[:, 1]
+        nodes = go.Scattergl(
+            x=x, y=y,
+            mode="markers+text",
+            marker=dict(
+                size=self.node_size,
+                color=self.node_fill,
+                line=dict(color=self.node_edge, width=2),
+            ),
+            text=labels,
+            textfont=dict(color="black"),
+            opacity=1,
+            # opacity=self.node_opacity,
+)
+
+        fig.add_trace(nodes)
+        self._node_trace_idx = len(fig.data) - 1
+
+        # text = go.Scattergl(
+        #     x=x, y=y,
+        #     mode="text",
+        #     text=labels,
+        #     textfont=dict(color="black"),
+        # )
+
+        # fig.add_trace(text)
+
 
     def _build_base_trace(self, fig):
             """Head outline, nose, and node markers (no edges)."""
@@ -405,7 +413,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
 
             fig.add_trace(nose)
     
-    def _get_edge_path(self, i: int, j: int, use_arcs: bool) -> np.ndarray:
+    def _get_edge_path(self, i: int, j: int, use_arcs: bool=True) -> np.ndarray:
         p0 = self.locs[i]
         p1 = self.locs[j]
         if use_arcs:
@@ -447,12 +455,13 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
     ) -> List[go.Scattergl]:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         
-        # set up these traces
-        edge_traces: List[go.Scattergl] = []
         n_nodes = C.shape[0]
         #  LOOP OVER ALL POSSIBLE TRACES TO CREATE ALL EDGES
         ij_iter = helpers._get_ij_iter(n_nodes, directed) 
+        # print(len(list(ij_iter)))
         for i, j in ij_iter:
+            # print(i)
+            # print(j)
             # get connection value
             w = C[i, j]
 
@@ -464,7 +473,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             width = helpers._get_edge_width(edge_weight=w, scale=scale, width_range=self.edge_width_range)
 
             ### GET EDGE PATH
-            P = self._get_edge_path(i, j, use_arcs=directed)
+            P = self._get_edge_path(i, j)
 
             ### ADD TO EDGE TRACE LIST. CREATES EDGE
             fig.add_trace(
@@ -508,46 +517,49 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
     ) -> go.Figure:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
+        print("START")
         fig = go.Figure()
-        self._build_base_trace(fig)
-        # The node trace is always the *last* one in base:
-        
-        
+        with fig.batch_update():
+            self._build_base_trace(fig)
+            # The node trace is always the *last* one in base:
+            
+            print("build base")
 
-        ### CREATE EDGES
-        self._build_edge_traces(C=C, 
-                                labels=labels,
-                                directed=directed,
-                                color_scale_info=color_scale_info,
-                                fig=fig
-                                )
+            ### CREATE EDGES
+            self._build_edge_traces(C=C, 
+                                    labels=labels,
+                                    directed=directed,
+                                    color_scale_info=color_scale_info,
+                                    fig=fig
+                                    )
+            print("build edges")
 
+            ### CACHE EDGES (i, j) --> idx
 
-        ### CACHE EDGES (i, j) --> idx
+            # self._edge_trace_idx = helpers._create_cache_edges(labels, fig)
+            self._build_node_trace(fig, labels)
 
-        # self._edge_trace_idx = helpers._create_cache_edges(labels, fig)
-        self._build_node_trace(fig, labels)
+            ### CREATE COLOR BAR
+            colorbar_trace_idx = helpers._add_colorbar_trace(fig=fig, colorscale=colorscale,zmin=zmin,zmax=zmax, viz_type=VizType.FIG2D)
+            self._colorbar_trace_idx = colorbar_trace_idx
 
-        ### CREATE COLOR BAR
-        colorbar_trace_idx = helpers._add_colorbar_trace(fig=fig, colorscale=colorscale,zmin=zmin,zmax=zmax, viz_type=VizType.FIG2D)
-        self._colorbar_trace_idx = colorbar_trace_idx
+            ### ADD REST OF LAYOUT
+            fig.update_layout(
+                xaxis=dict(
+                    visible=False,
+                    scaleanchor="y",
+                    scaleratio=1,
+                ),
+                yaxis=dict(visible=False),
+                autosize=True,
+                margin=dict(l=0, r=0, t=40, b=0),
+                showlegend=False,
+                plot_bgcolor="white",
+            )
 
-        ### ADD REST OF LAYOUT
-        fig.update_layout(
-            xaxis=dict(
-                visible=False,
-                scaleanchor="y",
-                scaleratio=1,
-            ),
-            yaxis=dict(visible=False),
-            autosize=True,
-            margin=dict(l=0, r=0, t=40, b=0),
-            showlegend=False,
-            plot_bgcolor="white",
-        )
-
-        helpers._update_title(fig=fig, title=title)
+            helpers._update_title(fig=fig, title=title)
         self.fig = fig
+        print("FINISH")
         return fig
 
     def update_figure(self,
@@ -573,6 +585,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             )
 
         with fig.batch_update():
+            # print(f"{update_type=}")
             if update_type == UpdateType.NODES:
 
                 node_trace = fig.data[self._node_trace_idx]
@@ -582,6 +595,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                     labels=labels,
                     size=self.node_size,
                     color=self.node_fill,
+                    # opacity=self.node_opacity
                 )
 
                 self.fig = fig
@@ -613,10 +627,12 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
 
                 ### GET COLOR
                 color = helpers._get_edge_color(edge_weight=w, zmin=zmin, zmax=zmax, colorscale=colorscale, default_neg_color=self.default_neg_color, default_pos_color=self.default_pos_color)
-
+                P = self._get_edge_path(i, j)
                 ### GET WIDTH
                 width = helpers._get_edge_width(edge_weight=w, scale=scale, width_range=self.edge_width_range)
                 ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE THIS AN UPDATEABLE VALUE
+                trace.x = P[:, 0]
+                trace.y = P[:,1]
                 helpers._update_edge_trace(trace=trace, edge_weight=w, color=color, width=width, opacity=self.edge_opacity, label1=labels[i], label2=labels[j])
 
             # UPDATE COLOR BAR (MAKE THIS FUNCTION)
@@ -632,7 +648,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         self,
         chanlocs,
         node_size: float = 28.0,
-        node_opacity: float=0.75,
+        # node_opacity: float=0.75,
         edge_width_range: Tuple[float] = (0.4, 5),
         edge_opacity: float=0.5,
         default_pos_color: str = "red",
@@ -649,7 +665,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         HandlesNodes.__init__(self,
                               chanlocs=chanlocs, 
                          node_size=node_size, 
-                         node_opacity=node_opacity,
+                        #  node_opacity=node_opacity,
                          edge_width_range=edge_width_range,
                          edge_opacity=edge_opacity,
                          node_fill=node_fill,
@@ -676,13 +692,12 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
             x=x, y=y, z=z,
             mode="markers+text",
             text=labels,
-            textposition="top center",
+            textposition="middle center",
             textfont=dict(size=10, color="black"),
             marker=dict(size=self.node_size, color=self.node_fill),
             name="Electrodes"
         ))
         self._node_trace_idx = len(fig.data) - 1
-
 
     def _build_base_trace(self, fig, brain_mesh: Optional[pv.PolyData]):
         if brain_mesh is not None and pv is not None and brain_mesh.n_points > 0:
@@ -759,50 +774,113 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         mesh_l_trace.visible = self.show_hemi_left
         mesh_r_trace.visible = self.show_hemi_right
     
-
-    ### NEED TO FIX INPUTS
     def _get_edge_path(self, i: int, j: int, C: np.ndarray, m: int = 60) -> np.ndarray:
         """
         Build a 3D concave curve from node i to j.
-        The curve bulges outward from the origin (shell-like), instead of convex.
+        The curve lies in the plane formed by {origin, p0, p1},
+        and bulges outward from the origin.
         """
         p0 = self.locs[i]
         p1 = self.locs[j]
+
         chord = p1 - p0
         L = np.linalg.norm(chord)
         if L < 1e-12:
             return np.vstack([p0, p1])
 
-        # Direction of edge
+        # ---- 1) Construct the plane defined by (origin, p0, p1) ----
+        plane_normal = np.cross(p0, p1)
+        n_norm = np.linalg.norm(plane_normal)
+
+        # If p0 and p1 are colinear with origin — fallback
+        if n_norm < 1e-12:
+            plane_normal = np.cross(chord, np.array([0., 0., 1.]))
+            n_norm = np.linalg.norm(plane_normal)
+            if n_norm < 1e-12:
+                plane_normal = np.cross(chord, np.array([1., 0., 0.]))
+                n_norm = np.linalg.norm(plane_normal)
+
+        plane_normal /= n_norm
+
+        # ---- 2) Direction from p0→p1 along the plane (unit) ----
         d = chord / L
 
-        # Perpendicular vector: any vector perpendicular to chord and pointing away from origin
-        perp = np.cross(d, p0)  # cross with starting point to push outward
-        if np.linalg.norm(perp) < 1e-6:
-            perp = np.cross(d, np.array([0.0, 0.0, 1.0]))
-        perp /= np.linalg.norm(perp) + 1e-12
+        # ---- 3) Direction for arc height = in plane & ⟂ chord ----
+        # This is the "outward bulge" direction.
+        perp = np.cross(plane_normal, d)
+        perp /= np.linalg.norm(perp)
 
-        # Arc height
-        arc_height = self.arc_radius if self.arc_radius is not None else 0.15 * L
+        # Make sure perp points AWAY from origin
+        if np.dot(perp, (p0 + p1) * 0.5) < 0:
+            perp = -perp
 
-        # Parametric t
+        # ---- 4) Arc height (user controlled or automatic) ----
+        arc_height = self.arc_radius * 50 if self.arc_radius is not None else 0.15 * L
+
+        # ---- 5) Parametric curve ----
         t = np.linspace(0.0, 1.0, m)
 
         # Base straight line
         base = p0[None, :] + np.outer(t, chord)
 
-        # Concave hump: subtract to point outward from origin
-        hump = -arc_height * np.sin(np.pi * t)
+        # Outward concave bulge using sinusoid
+        hump = arc_height * np.sin(np.pi * t)
         P = base + np.outer(hump, perp)
 
-        # Optional offset for bidirectional edges
+        # ---- 6) Bidirectional edge offset ----
         reverse_exists = (np.isfinite(C[j, i]) and abs(C[j, i]) > 1e-12)
         if reverse_exists:
             sign = 1 if i < j else -1
             offset_amt = 0.06 * L * sign
-            P += np.outer(np.sin(np.pi * t) * offset_amt, perp)
+            P += np.outer(np.sin(np.pi * t) * offset_amt, plane_normal)
 
         return P
+
+
+
+    # ### NEED TO FIX INPUTS
+    # def _get_edge_path(self, i: int, j: int, C: np.ndarray, m: int = 60) -> np.ndarray:
+    #     """
+    #     Build a 3D concave curve from node i to j.
+    #     The curve bulges outward from the origin (shell-like), instead of convex.
+    #     """
+    #     p0 = self.locs[i]
+    #     p1 = self.locs[j]
+    #     chord = p1 - p0
+    #     L = np.linalg.norm(chord)
+    #     if L < 1e-12:
+    #         return np.vstack([p0, p1])
+
+    #     # Direction of edge
+    #     d = chord / L
+
+    #     # Perpendicular vector: any vector perpendicular to chord and pointing away from origin
+    #     perp = np.cross(d, p0)  # cross with starting point to push outward
+    #     if np.linalg.norm(perp) < 1e-6:
+    #         perp = np.cross(d, np.array([0.0, 0.0, 1.0]))
+    #     perp /= np.linalg.norm(perp) + 1e-12
+
+    #     # Arc height
+    #     arc_height = self.arc_radius * 50 if self.arc_radius is not None else 0.15 * L
+
+    #     # Parametric t
+    #     t = np.linspace(0.0, 1.0, m)
+
+    #     # Base straight line
+    #     base = p0[None, :] + np.outer(t, chord)
+
+    #     # Concave hump: subtract to point outward from origin
+    #     hump = -arc_height * np.sin(np.pi * t)
+    #     P = base + np.outer(hump, perp)
+
+    #     # Optional offset for bidirectional edges
+    #     reverse_exists = (np.isfinite(C[j, i]) and abs(C[j, i]) > 1e-12)
+    #     if reverse_exists:
+    #         sign = 1 if i < j else -1
+    #         offset_amt = 0.06 * L * sign
+    #         P += np.outer(np.sin(np.pi * t) * offset_amt, perp)
+
+    #     return P
 
 
     def _collect_arrow(self, P: np.ndarray, w: float):
@@ -981,7 +1059,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                     labels=labels,
                     size=self.node_size,
                     color=self.node_fill,
-                    opacity=self.node_opacity
+                    # opacity=self.node_opacity
                 )
 
                 self.fig = fig
@@ -1019,7 +1097,10 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
 
                 ### GET WIDTH
                 width = helpers._get_edge_width(edge_weight=w, scale=scale, width_range=self.edge_width_range)
-
+                P = self._get_edge_path(i, j, C)
+                trace.x=P[:,0]
+                trace.y=P[:,1]
+                trace.z=P[:,2]
                 ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE THIS AN UPDATEABLE VALUE
                 helpers._update_edge_trace(trace, w, color, width, self.edge_opacity, labels[i], labels[j])
 

@@ -37,7 +37,7 @@ def determine_update_type_from_trigger(trigger_id: str) -> UpdateType:
     # Node changes (2D & 3D)
     if trigger_id in {
         "viz-node-node_size-slider",
-         "viz-node-node_opacity-slider",
+        #  "viz-node-node_opacity-slider",
     }:
         return UpdateType.NODES
 
@@ -88,7 +88,7 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
 
         # 2D visualization options
         Input("viz-node-node_size-slider", "value"),
-        Input("viz-node-node_opacity-slider", "value"),
+        # Input("viz-node-node_opacity-slider", "value"),
         Input("viz-node-edge_width-range_slider", "value"),
         Input("viz-node-edge_opacity-slider", "value"),
         Input("viz-node-arc_radius-slider", "value"),
@@ -109,7 +109,7 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
                             color_range,
                                
                              node_size, 
-                            node_opacity, 
+                            # node_opacity, 
                              edge_width_range, 
                              edge_opacity, 
                              arc_radius,
@@ -142,7 +142,7 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             # "update_xyz": global_state.brain_data.chanlocs,
             "viz_type": viz_type,
             "node_size": node_size,
-            "node_opacity": node_opacity,
+            # "node_opacity": node_opacity,
             "edge_width_range": edge_width_range,
             "edge_opacity": edge_opacity,
             "arc_radius": arc_radius,
