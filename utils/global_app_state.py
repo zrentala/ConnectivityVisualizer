@@ -26,9 +26,9 @@ class GlobalAppState:
         chanlocs = pd.DataFrame(
             {
                 "label": list(pos.keys()),
-                "x": [coord[0] * 100 for coord in pos.values()],  # convert to cm to match your scale
-                "y": [coord[1]  * 100 for coord in pos.values()],
-                "z": [coord[2] * 100 for coord in pos.values()],
+                "x": [coord[0] * 1000 for coord in pos.values()],  # convert to cm to match your scale
+                "y": [coord[1]  * 1000 for coord in pos.values()],
+                "z": [coord[2] * 1000 for coord in pos.values()],
             }
         )
         del montage

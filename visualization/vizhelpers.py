@@ -296,10 +296,11 @@ def _update_node_trace_all(
 
     # Update marker arrays directly
     if size is not None:
-        trace.update(marker=dict(size=[size]*n))
+        print(f"{size=}")
+        trace.update(marker=dict(size=size))
 
     if color is not None:
-        trace.marker.color = [color] * n
+        trace.marker.color = color
 
     # if opacity is not None:
     #     # print(f"updated opacity: {opacity}")
@@ -472,15 +473,64 @@ def parse_channel_locs(
 def compute_locs_3d(sx: np.ndarray, sy: np.ndarray, sz: np.ndarray) -> np.ndarray:
     return np.column_stack([sx, sy, sz]).astype(float)
 
+# def compute_locs_2d_topo(sx: np.ndarray, sy: np.ndarray) -> np.ndarray:
+#     xs = -sx.copy()
+#     ys =  sy.copy()
+
+#     xs = xs / (np.max(np.abs(xs)) + 1e-12)
+#     ys = ys / (np.max(np.abs(ys)) + 1e-12) * 1.1 + 0.1
+
+#     return np.column_stack([xs, ys])
+
 def compute_locs_2d_topo(sx: np.ndarray, sy: np.ndarray) -> np.ndarray:
+    """
+    Convert raw x,y EEG positions to 2D topographic coordinates.
+    If two nodes lie too close together (overlap), the later one is pushed outward.
+    """
+    # --- 1) Standard topo projection ---
     xs = -sx.copy()
-    ys =  sy.copy()
+    ys = sy.copy()
 
-    xs = xs / (np.max(np.abs(xs)) + 1e-12) * 0.9
-    ys = ys / (np.max(np.abs(ys)) + 1e-12) * 0.9
+    xs = xs / (np.max(np.abs(xs)) + 1e-12)
+    ys = ys / (np.max(np.abs(ys)) + 1e-12) * 1.1 + 0.1
 
-    return np.column_stack([xs, ys])
+    locs = np.column_stack([xs, ys])
 
+    # --- 2) Sort for sliding-window proximity checking ---
+    # Sort by y primarily (top → bottom), then by x
+    order = np.lexsort((locs[:, 0], locs[:, 1]))
+    sorted_locs = locs[order]
+
+    # --- 3) Sliding-window collision resolution ---
+    min_dist = 0.15   # threshold distance for considering "overlap"
+    push_amount = 0.09  # how far outward to push
+
+    for i in range(1, len(sorted_locs)):
+        xi, yi = sorted_locs[i]
+
+        # Compare only to a window of recent neighbors (e.g., last 8)
+        start = max(0, i - 8)
+        for j in range(start, i):
+            xj, yj = sorted_locs[j]
+            dist = np.hypot(xi - xj, yi - yj)
+
+            if dist < min_dist:
+                # Push node i outward from the center
+                r = np.hypot(xi, yi)
+                if r == 0:
+                    # If at center, push upward slightly
+                    sorted_locs[i] += np.array([0.0, push_amount])
+                else:
+                    sorted_locs[i] += push_amount * (sorted_locs[i] / r)
+
+                # Update xi, yi for subsequent checks
+                xi, yi = sorted_locs[i]
+
+    # --- 4) Restore original ordering ---
+    unsorted_locs = np.zeros_like(sorted_locs)
+    unsorted_locs[order] = sorted_locs
+
+    return unsorted_locs
 
 
 def _get_candidate_edges(edge_trace_idx, old_thresh_mask, new_thresh_mask, update_type, directed, n_nodes):

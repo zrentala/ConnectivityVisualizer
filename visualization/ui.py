@@ -1,7 +1,7 @@
 # visualization/ui.py
 from dash import html, dcc
 import dash_bootstrap_components as dbc
-from interaction.ui_controls import create_slider, create_thresh_component, create_viz_controls, create_data_component
+from interaction.ui_controls import create_stat_component, create_thresh_component, create_viz_controls, create_data_component
 import dash_split_pane as dsp
 
 
@@ -10,6 +10,7 @@ def create_layout(n_mat, initial_fig):
     threshold_comp = create_thresh_component()
     viz_controls = create_viz_controls(n_mat=n_mat)
     data_component = create_data_component(n_mat= n_mat)
+    stat_component = create_stat_component()
 
     left = html.Div(
         [
@@ -28,19 +29,83 @@ def create_layout(n_mat, initial_fig):
 
     right = html.Div(
         [
-            html.H3("Brain Connectivity Visualization", className="mb-3"),
-            dcc.Graph(
-                id="split-right-fig",
-                figure=initial_fig,
-                className="main-graph",
-                # useResizeHandler=True,
-                config={"responsive": True},
-                style={"height": "100%", "width": "100%", "flex": "1 1 auto", "minHeight": 0},
+            html.Div(
+                [
+                    html.H3("Brain Connectivity Visualization", className="mb-3"),
+                    dcc.Graph(
+                        id="split-right-fig",
+                        figure=initial_fig,
+                        config={"responsive": True},
+                        style={
+                            "height": "100%",
+                            "width": "100%",
+                            "minHeight": 0,
+                            "flex": "1 1 auto",
+                        },
+                    ),
+                ],
+                id="right-figure-container",
+                style={"height": "100%", "flex": "1 1 auto", "minWidth": 0},
+            ),
+
+            html.Div(
+                create_stat_component(),
+                id="right-stats-container",
+                style = {
+                    "display": "flex",
+                    "flexDirection": "row",
+                    "height": "100%",
+                    "flex": "0 0 260px",  # collapses smoothly
+                }
+
             ),
         ],
-        className="bg-light p-3 rounded shadow-sm",
-        style={"height": "100%", "overflow": "hidden", "display": "flex", "flexDirection": "column", "flex": "1 1 auto"},
+        style={
+            "height": "100%",
+            "display": "flex",
+            "flexDirection": "row",
+            "overflow": "hidden",
+        },
     )
+
+    
+    # fig_col = html.Div(
+    #     [
+    #         html.H3("Brain Connectivity Visualization", className="mb-3"),
+    #         dcc.Graph(
+    #             id="split-right-fig",
+    #             figure=initial_fig,
+    #             className="main-graph",
+    #             # useResizeHandler=True,
+    #             config={"responsive": True},
+    #             style={"height": "100%", "width": "100%", "flex": "1 1 auto", "minHeight": 0},
+    #         ),
+    #     ]
+    # )
+
+    # stat_col = html.Div(
+    #     [
+    #         html.H3("Statistics", className="mb-3"),
+    #         stat_component,  # <- your custom stat component
+    #     ],
+    #     className="bg-light p-3 rounded shadow-sm",
+    #     style={
+    #         "height": "100%",
+    #         "overflowY": "auto",
+    #         "display": "flex",
+    #         "flexDirection": "column",
+    #     },
+    # )
+
+    # right = dbc.Row(
+    #     [
+    #         dbc.Col(fig_col, width=3, style={"height": "100vh", "overflow": "hidden"}),
+    #         dbc.Col(stat_col, width=9, style={"height": "100vh", "overflow": "hidden"}),
+
+    #     ],
+    #     className="bg-light p-3 rounded shadow-sm",
+    #     style={"height": "100%", "overflow": "hidden", "display": "flex", "flexDirection": "column", "flex": "1 1 auto"},
+    # )
 
     split_pane = dsp.DashSplitPane(
         id="split",

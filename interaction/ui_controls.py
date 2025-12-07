@@ -100,7 +100,7 @@ def create_thresh_component() -> html.Div:
             default="t",
         )
 
-        alpha_slider = create_slider(id='thresh-stat-alpha-slider', data_min=0, data_max=10, step=0.1, label="Alpha Level (%)")
+        alpha_slider = create_slider(id='thresh-stat-alpha-slider', data_min=0, data_max=10, step=0.1, label="Alpha Level (%)", default=0.75)
         return html.Div(
             [
                 test_type_dropdown,
@@ -144,12 +144,12 @@ def create_thresh_component() -> html.Div:
     )
 
 def create_node_options():
-    node_size_slider = create_slider(id="viz-node-node_size-slider", data_min=15, data_max=40, step=1, label="Node Size")
+    node_size_slider = create_slider(id="viz-node-node_size-slider", data_min=15, data_max=50, step=1, label="Node Size", default=30)
     # node_opacity_slider = create_slider(id="viz-node-node_opacity-slider", data_min=0, data_max=1, step=0.01, label="Node Opacity (%)")
 
     edge_width_range = create_range_slider(id="viz-node-edge_width-range_slider", data_min=0, data_max=10, step=0.1, default=[0.4, 5.0], label="Edge Width Size")
-    edge_opacity_slider = create_slider(id="viz-node-edge_opacity-slider", data_min=0, data_max=1, step=0.01, label="Edge Opacity (%)")
-    arc_radius_slider = create_slider(id="viz-node-arc_radius-slider", data_min=0, data_max=1, step=0.01, label="Arc Radius")
+    edge_opacity_slider = create_slider(id="viz-node-edge_opacity-slider", data_min=0, data_max=1, step=0.01, label="Edge Opacity (%)", default=0.8)
+    arc_radius_slider = create_slider(id="viz-node-arc_radius-slider", data_min=0, data_max=1, step=0.01, label="Arc Radius", default= 0)
     return html.Div(
         id="viz-node-container",
         children=[
@@ -449,3 +449,47 @@ def create_data_component(n_mat: int) -> html.Div:
         fluid=True,
         className=container_class,
     )
+
+def create_stat_component():
+    return html.Div(
+        [
+            # COLLAPSIBLE PANEL SEPARATE
+            dbc.Collapse(
+                id="stats-collapse",
+                is_open=False,
+                children=dbc.Card(
+                    dbc.CardBody(
+                        [
+                            html.H5("Network Statistics", className="card-title mb-3"),
+                            html.Div(
+                                [
+                                    html.Div([
+                                        html.Div("Total Nodes:", className="fw-bold"),
+                                        html.Div(id="stat-collapse-total_nodes-container")
+                                    ]),
+                                    html.Hr(),
+                                    html.Div([
+                                        html.Div("Total Edges:", className="fw-bold"),
+                                        html.Div(id="stat-collapse-total_edges-container")
+                                    ]),
+                                    html.Hr(),
+                                    html.Div([
+                                        html.Div("Visible Edges:", className="fw-bold"),
+                                        html.Div(id="stat-collapse-visible_edges-container")
+                                    ]),
+                                ],
+                                className="small",
+                            ),
+                        ]
+                    ),
+                ),
+            ),
+        ],
+        style={
+            "display": "flex",
+            "flexDirection": "row",
+            "height": "100%",
+            "alignItems": "flex-start",
+        },
+    )
+

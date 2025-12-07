@@ -78,7 +78,7 @@ class HandlesNodes():
         edge_width_range: Tuple[float]=(0.4, 5),
         edge_opacity: float = 0.5,
         arc_radius: float=0.5,
-        
+        n_arc_points: float=10,
         node_fill: str = "lightgreen",
         node_edge: str = "black",
     ) -> None:
@@ -92,6 +92,7 @@ class HandlesNodes():
         self.arc_radius = arc_radius
         self.locs: np.ndarray = np.empty((0, 2), dtype=float) # (n, 2)
         self.update_locs(chanlocs)
+        self.n_arc_points = n_arc_points
 
         # caches
         self._node_trace_idx = -999
@@ -197,7 +198,7 @@ class ConnectivityViewHeatmap(ConnectivityView):
                 zeroline=False,
             ),
             autosize=True,
-            margin=dict(l=60, r=20, t=40, b=80),
+            margin=dict(l=60, r=20, t=100, b=80),
             plot_bgcolor="white",
         )
 
@@ -358,6 +359,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
 
     def _build_node_trace(self, fig, labels):
         x, y = self.locs[:, 0], self.locs[:, 1]
+        print(f"{self.node_size=}")
         nodes = go.Scattergl(
             x=x, y=y,
             mode="markers+text",
@@ -368,7 +370,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             ),
             text=labels,
             textfont=dict(color="black"),
-            opacity=1,
+            # opacity=1,
             # opacity=self.node_opacity,
 )
 
@@ -417,7 +419,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         p0 = self.locs[i]
         p1 = self.locs[j]
         if use_arcs:
-            P = helpers._quad_bezier(p0, p1, self.arc_radius, m=60)
+            P = helpers._quad_bezier(p0, p1, self.arc_radius, m=self.n_arc_points)
         else:
             P = np.vstack([p0, p1])
         return P
@@ -482,7 +484,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                     y=P[:, 1],
                     mode="lines",
                     line=dict(color=color, width=width),
-                    opacity=0.75,
+                    opacity=self.edge_opacity,
                     showlegend=False,
                     hoverinfo="text",
                     text=f"{labels[i]} → {labels[j]}<br>Weight: {w:.3f}",
@@ -517,13 +519,13 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
     ) -> go.Figure:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
-        print("START")
+        # print("START")
         fig = go.Figure()
         with fig.batch_update():
             self._build_base_trace(fig)
             # The node trace is always the *last* one in base:
             
-            print("build base")
+            # print("build base")
 
             ### CREATE EDGES
             self._build_edge_traces(C=C, 
@@ -532,7 +534,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                                     color_scale_info=color_scale_info,
                                     fig=fig
                                     )
-            print("build edges")
+            # print("build edges")
 
             ### CACHE EDGES (i, j) --> idx
 
@@ -557,10 +559,9 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                 plot_bgcolor="white",
                 
             )
-
             helpers._update_title(fig=fig, title=title)
         self.fig = fig
-        print("FINISH")
+        # print("FINISH")
         return fig
 
     def update_figure(self,
@@ -601,6 +602,18 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
 
                 self.fig = fig
                 return fig
+            
+            if update_type == UpdateType.ALL:
+
+                node_trace = fig.data[self._node_trace_idx]
+
+                helpers._update_node_trace_all(
+                    trace=node_trace,
+                    labels=labels,
+                    size=self.node_size,
+                    color=self.node_fill,
+                    # opacity=self.node_opacity
+                )
 
             traces_list = helpers._get_candidate_edges(edge_trace_idx=self._edge_trace_idx, old_thresh_mask=old_thresh_mask, new_thresh_mask=new_thresh_mask, update_type=update_type, directed=directed, n_nodes=C.shape[0])
             # print(traces_list)
@@ -631,7 +644,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                 P = self._get_edge_path(i, j)
                 ### GET WIDTH
                 width = helpers._get_edge_width(edge_weight=w, scale=scale, width_range=self.edge_width_range)
-                ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE THIS AN UPDATEABLE VALUE
+                ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE TfHIS AN UPDATEABLE VALUE
                 trace.x = P[:, 0]
                 trace.y = P[:,1]
                 helpers._update_edge_trace(trace=trace, edge_weight=w, color=color, width=width, opacity=self.edge_opacity, label1=labels[i], label2=labels[j])
@@ -689,6 +702,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
     def _build_node_trace(self, fig, labels):
         # ========= NODES =========
         x, y, z = self.locs[:, 0], self.locs[:, 1], self.locs[:, 2]
+
         fig.add_trace(go.Scatter3d(
             x=x, y=y, z=z,
             mode="markers+text",
@@ -775,7 +789,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         mesh_l_trace.visible = self.show_hemi_left
         mesh_r_trace.visible = self.show_hemi_right
     
-    def _get_edge_path(self, i: int, j: int, C: np.ndarray, m: int = 60) -> np.ndarray:
+    def _get_edge_path(self, i: int, j: int, C: np.ndarray) -> np.ndarray:
         """
         Build a 3D concave curve from node i to j.
         The curve lies in the plane formed by {origin, p0, p1},
@@ -819,7 +833,7 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         arc_height = self.arc_radius * 50 if self.arc_radius is not None else 0.15 * L
 
         # ---- 5) Parametric curve ----
-        t = np.linspace(0.0, 1.0, m)
+        t = np.linspace(0.0, 1.0, self.n_arc_points)
 
         # Base straight line
         base = p0[None, :] + np.outer(t, chord)
@@ -1058,13 +1072,24 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                 helpers._update_node_trace_all(
                     trace=node_trace,
                     labels=labels,
-                    size=self.node_size,
+                    size=self.node_size * 0.5,
                     color=self.node_fill,
                     # opacity=self.node_opacity
                 )
 
                 self.fig = fig
                 return fig
+            
+            if update_type == UpdateType.ALL:
+                node_trace = fig.data[self._node_trace_idx]
+
+                helpers._update_node_trace_all(
+                    trace=node_trace,
+                    labels=labels,
+                    size=self.node_size * 0.5,
+                    color=self.node_fill,
+                    # opacity=self.node_opacity
+                )
 
             traces_list = helpers._get_candidate_edges(edge_trace_idx=self._edge_trace_idx, old_thresh_mask=old_thresh_mask, new_thresh_mask=new_thresh_mask, update_type=update_type, directed=directed, n_nodes=C.shape[0])
             
