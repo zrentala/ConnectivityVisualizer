@@ -278,218 +278,324 @@ def create_viz_controls(n_mat: int) -> html.Div:
         className=container_class,
     )
 
+def create_data_component() -> html.Div:
+    """Create a 3-step data selection component with add/load dataset controls."""
 
+    # Step indicator
+    step_indicator = html.Div(id="data-step-indicator", children="Step 1: Load FC data", className="mb-2 fw-bold")
 
-def create_data_component(n_mat: int) -> html.Div:
-    """Create data selection component with add/load dataset controls."""
-    # Slider over connectivity matrices
-    animation_slider = create_slider(
-        id="data-conn_idx-slider",
-        data_max=n_mat-1,
-        data_min=0,
-        step=1,
-        label="Connectivity Matrix Index",
-        default=0,
-    )
-
-    # Label that shows either "No dataset loaded" or current dataset name
-    data_label = html.Span(
-        id="data-dataset-label",
-        children="No dataset loaded",
-        className="ms-2",
-    )
-
-    # "+" button to add / replace data
+    # "+" button to open modal
     add_data_button = dbc.Button(
-        "+",
-        id="data-add_dataset-button",
-        color="primary",
-        size="sm",
-        className="ms-2",
-        title="Add or replace dataset",
-        n_clicks=0,
+        "+", id="data-add_dataset-button", color="primary", size="sm", className="ms-2",
+        title="Add or replace dataset", n_clicks=0
     )
 
-    # Modal that appears when you click the "+" button
+    # Label showing current dataset status
+    data_label = html.Span(
+        id="data-dataset-label", children="No dataset loaded", className="ms-2"
+    )
+
+    # Modal layout
     data_modal = dbc.Modal(
         [
             dbc.ModalHeader("Add or replace dataset"),
             dbc.ModalBody(
                 [
-                    # 1) Load your own
-                    html.H5("1. Load your own data"),
-                    dcc.Upload(
-                        id="data-modal-upload",
-                        children=html.Div(
-                            [
-                                "Drag and drop or ",
-                                html.A("select a file"),
-                            ]
-                        ),
-                        multiple=False,
-                        className="border p-3 text-center mb-3",
-                    ),
-
-                    html.Hr(),
-
-                    # 2) Choose from preset
-                    html.H5("2. Choose a preset dataset"),
-                    create_dropdown(id="data-modal-dataset_preset-dropdown", options=[
-                            {"label": "Small undirected (n=10, mats=5)", "value": "small_undirected"},
-                            {"label": "Medium directed (n=20, mats=10)", "value": "medium_directed"},
-                            {"label": "Large undirected (n=64, mats=20)", "value": "large_undirected"},
-                        ],
-                        clearable=True),
-
-                    html.Hr(),
-
-                    # 3) Generate your own
-                    html.H5("3. Generate simulated data"),
-                    dbc.Row(
+                    # Step 1: Functional connectivity data
+                    html.Div(
                         [
-                            dbc.Col(
-                                [
-                                    dbc.Label("Number of nodes"),
-                                    dbc.Input(
-                                        # id=f"{id_prefix}-gen-n-elec",
-                                        id="data-modal-gen_n_elec-input",
-                                        type="number",
-                                        min=2,
-                                        step=1,
-                                        value=20,
-                                    ),
-                                ],
-                                md=4,
+                            html.H5("Step 1: Load functional connectivity (FC) data"),
+                            dcc.Upload(
+                                id="data-fc-upload",
+                                children=html.Div(["Drag and drop or ", html.A("select a file")]),
+                                multiple=False, className="border p-3 text-center mb-2",
                             ),
-                            dbc.Col(
-                                [
-                                    dbc.Label("Number of mats"),
-                                    dbc.Input(
-                                        id="data-modal-gen_n_mats-input",
-                                        type="number",
-                                        min=1,
-                                        step=1,
-                                        value=10,
-                                    ),
+                            create_dropdown(
+                                id="data-fc-preset-dropdown",
+                                options=[
+                                    {"label": "Small undirected (n=10, mats=5)", "value": "small_undirected"},
+                                    {"label": "Medium directed (n=20, mats=10)", "value": "medium_directed"},
+                                    {"label": "Large undirected (n=64, mats=20)", "value": "large_undirected"},
                                 ],
-                                md=4,
+                                clearable=True
                             ),
-                            dbc.Col(
-                                [
-                                    dbc.Label("Directed? "),
-                                    dbc.Checkbox(
-                                        # id=f"{id_prefix}-gen-directed",
-                                        id="data-modal-gen_directed-checkbox",
-                                        value=False,
-                                    ),
-                                ],
-                                md=4,
-                                className="d-flex align-items-end",
-                            ),
+                            dbc.Button("Generate FC data", id="data-fc-gen-btn", color="secondary", className="mt-2", n_clicks=0),
                         ],
-                        className="mb-2",
+                        id="step-1-container", className="mb-3"
                     ),
-                    dbc.Button(
-                        "Generate",
-                        # id=f"{id_prefix}-gen-btn",
-                        id="data-modal-gen-button",
-                        color="secondary",
-                        className="mt-2",
-                        n_clicks=0,
+                    
+                    # Step 2: Location data
+                    html.Div(
+                        [
+                            html.H5("Step 2: Load location data"),
+                            dcc.Upload(
+                                id="data-loc-upload",
+                                children=html.Div(["Drag and drop or ", html.A("select a file")]),
+                                multiple=False, className="border p-3 text-center mb-2",
+                            ),
+                            create_dropdown(
+                                id="data-loc-preset-dropdown",
+                                options=[
+                                    {"label": "10-channel 10-20 layout", "value": "standard_10_20"},
+                                    {"label": "64-channel layout", "value": "standard_64"},
+                                ],
+                                clearable=True
+                            ),
+                            dbc.Button("Generate locations", id="data-loc-gen-btn", color="secondary", className="mt-2", n_clicks=0),
+                        ],
+                        id="step-2-container", className="mb-3"
+                    ),
+                    
+                    # Step 3: Directed/undirected
+                    html.Div(
+                        [
+                            html.H5("Step 3: Directed or undirected?"),
+                            dbc.Checkbox(id="data-directed-checkbox", value=False, className="me-2"),
+                            html.Label("Directed"),
+                        ],
+                        id="step-3-container", className="mb-2"
                     ),
                 ]
             ),
             dbc.ModalFooter(
-                dbc.Button(
-                    "Close",
-                    id="data-modal-close-button",
-                    # id=f"{id_prefix}-data-modal-close",
-                    className="ms-auto",
-                    n_clicks=0,
-                )
+                dbc.Button("Close", id="data-modal-close-button", className="ms-auto", n_clicks=0)
             ),
         ],
         id="data-modal",
-        is_open=True,
+        is_open=False,
         centered=True,
         backdrop="static",
     )
 
-    # Store to keep current dataset metadata (name, source, etc.)
-    data_store = dcc.Store(
-        # id=f"{id_prefix}-data-store",
-        id="data-store",
-        data={
-            "name": None,
-            "source": None,
-            # "ready": False
-        },
-    )
+    # Store for metadata
+    data_store = dcc.Store(id="data-store", data={"fc": None, "loc": None, "directed": None})
 
-    # Layout: dataset controls row + slider + modal + store
+    # Slider for FC matrices
+    animation_slider = create_slider(id="data-conn_idx-slider", data_min=0, data_max=0, step=1, label="Connectivity Matrix Index", default=0)
+
+    # Container layout
     return dbc.Container(
-        children=[
-            dbc.Row(
-                [
-                    dbc.Col(
-                        [
-                            dbc.Label("Dataset:"),
-                            data_label,
-                            add_data_button,
-                        ],
-                        width="auto",
-                    )
-                ],
-                className="mb-3",
-            ),
+        [
+            dbc.Row([dbc.Col([dbc.Label("Dataset:"), data_label, add_data_button], width="auto")], className="mb-3"),
+            step_indicator,
             animation_slider,
             data_modal,
             data_store,
         ],
-        fluid=True,
-        className=container_class,
+        fluid=True, className=container_class
     )
+
+# def create_data_component(n_mat: int) -> html.Div:
+#     """Create data selection component with add/load dataset controls."""
+#     # Slider over connectivity matrices
+#     animation_slider = create_slider(
+#         id="data-conn_idx-slider",
+#         data_max=n_mat-1,
+#         data_min=0,
+#         step=1,
+#         label="Connectivity Matrix Index",
+#         default=0,
+#     )
+
+#     # Label that shows either "No dataset loaded" or current dataset name
+#     data_label = html.Span(
+#         id="data-dataset-label",
+#         children="No dataset loaded",
+#         className="ms-2",
+#     )
+
+#     # "+" button to add / replace data
+#     add_data_button = dbc.Button(
+#         "+",
+#         id="data-add_dataset-button",
+#         color="primary",
+#         size="sm",
+#         className="ms-2",
+#         title="Add or replace dataset",
+#         n_clicks=0,
+#     )
+
+#     # Modal that appears when you click the "+" button
+#     data_modal = dbc.Modal(
+#         [
+#             dbc.ModalHeader("Add or replace dataset"),
+#             dbc.ModalBody(
+#                 [
+#                     # 1) Load your own
+#                     html.H5("1. Load your own data"),
+#                     dcc.Upload(
+#                         id="data-modal-upload",
+#                         children=html.Div(
+#                             [
+#                                 "Drag and drop or ",
+#                                 html.A("select a file"),
+#                             ]
+#                         ),
+#                         multiple=False,
+#                         className="border p-3 text-center mb-3",
+#                     ),
+
+#                     html.Hr(),
+
+#                     # 2) Choose from preset
+#                     html.H5("2. Choose a preset dataset"),
+#                     create_dropdown(id="data-modal-dataset_preset-dropdown", options=[
+#                             {"label": "Small undirected (n=10, mats=5)", "value": "small_undirected"},
+#                             {"label": "Medium directed (n=20, mats=10)", "value": "medium_directed"},
+#                             {"label": "Large undirected (n=64, mats=20)", "value": "large_undirected"},
+#                         ],
+#                         clearable=True),
+
+#                     html.Hr(),
+
+#                     # 3) Generate your own
+#                     html.H5("3. Generate simulated data"),
+#                     dbc.Row(
+#                         [
+#                             dbc.Col(
+#                                 [
+#                                     dbc.Label("Number of nodes"),
+#                                     dbc.Input(
+#                                         # id=f"{id_prefix}-gen-n-elec",
+#                                         id="data-modal-gen_n_elec-input",
+#                                         type="number",
+#                                         min=2,
+#                                         step=1,
+#                                         value=20,
+#                                     ),
+#                                 ],
+#                                 md=4,
+#                             ),
+#                             dbc.Col(
+#                                 [
+#                                     dbc.Label("Number of mats"),
+#                                     dbc.Input(
+#                                         id="data-modal-gen_n_mats-input",
+#                                         type="number",
+#                                         min=1,
+#                                         step=1,
+#                                         value=10,
+#                                     ),
+#                                 ],
+#                                 md=4,
+#                             ),
+#                             dbc.Col(
+#                                 [
+#                                     dbc.Label("Directed? "),
+#                                     dbc.Checkbox(
+#                                         # id=f"{id_prefix}-gen-directed",
+#                                         id="data-modal-gen_directed-checkbox",
+#                                         value=False,
+#                                     ),
+#                                 ],
+#                                 md=4,
+#                                 className="d-flex align-items-end",
+#                             ),
+#                         ],
+#                         className="mb-2",
+#                     ),
+#                     dbc.Button(
+#                         "Generate",
+#                         # id=f"{id_prefix}-gen-btn",
+#                         id="data-modal-gen-button",
+#                         color="secondary",
+#                         className="mt-2",
+#                         n_clicks=0,
+#                     ),
+#                 ]
+#             ),
+#             dbc.ModalFooter(
+#                 dbc.Button(
+#                     "Close",
+#                     id="data-modal-close-button",
+#                     # id=f"{id_prefix}-data-modal-close",
+#                     className="ms-auto",
+#                     n_clicks=0,
+#                 )
+#             ),
+#         ],
+#         id="data-modal",
+#         is_open=True,
+#         centered=True,
+#         backdrop="static",
+#     )
+
+#     # Store to keep current dataset metadata (name, source, etc.)
+#     data_store = dcc.Store(
+#         # id=f"{id_prefix}-data-store",
+#         id="data-store",
+#         data={
+#             "name": None,
+#             "source": None,
+#             # "ready": False
+#         },
+#     )
+
+#     # Layout: dataset controls row + slider + modal + store
+#     return dbc.Container(
+#         children=[
+#             dbc.Row(
+#                 [
+#                     dbc.Col(
+#                         [
+#                             dbc.Label("Dataset:"),
+#                             data_label,
+#                             add_data_button,
+#                         ],
+#                         width="auto",
+#                     )
+#                 ],
+#                 className="mb-3",
+#             ),
+#             animation_slider,
+#             data_modal,
+#             data_store,
+#         ],
+#         fluid=True,
+#         className=container_class,
+#     )
 
 def create_stat_component():
     return html.Div(
         [
-            # COLLAPSIBLE PANEL SEPARATE
-            dbc.Collapse(
-                id="stats-collapse",
-                is_open=False,
-                children=dbc.Card(
-                    dbc.CardBody(
-                        [
-                            html.H5("Network Statistics", className="card-title mb-3"),
-                            html.Div(
-                                [
-                                    html.Div([
-                                        html.Div("Total Nodes:", className="fw-bold"),
-                                        html.Div(id="stat-collapse-total_nodes-container")
-                                    ]),
-                                    html.Hr(),
-                                    html.Div([
-                                        html.Div("Total Edges:", className="fw-bold"),
-                                        html.Div(id="stat-collapse-total_edges-container")
-                                    ]),
-                                    html.Hr(),
-                                    html.Div([
-                                        html.Div("Visible Edges:", className="fw-bold"),
-                                        html.Div(id="stat-collapse-visible_edges-container")
-                                    ]),
-                                ],
-                                className="small",
-                            ),
-                        ]
-                    ),
+            dbc.Card(
+                dbc.CardBody(
+                    [
+                        html.H5("Network Statistics", className="card-title mb-3"),
+
+                        html.Div(
+                            [
+                                html.Div([
+                                    html.Div("Total Nodes:", className="fw-bold me-2"),
+                                    html.Div(id="stat-collapse-total_nodes-container")
+                                ], className="d-flex justify-content-between"),
+
+                                html.Hr(className="my-2"),
+
+                                html.Div([
+                                    html.Div("Total Edges:", className="fw-bold me-2"),
+                                    html.Div(id="stat-collapse-total_edges-container")
+                                ], className="d-flex justify-content-between"),
+
+                                html.Hr(className="my-2"),
+
+                                html.Div([
+                                    html.Div("Visible Edges:", className="fw-bold me-2"),
+                                    html.Div(id="stat-collapse-visible_edges-container")
+                                ], className="d-flex justify-content-between"),
+                            ],
+                        ),
+                    ],
                 ),
+
             ),
         ],
         style={
             "display": "flex",
-            "flexDirection": "row",
-            "height": "100%",
-            "alignItems": "flex-start",
+            "flexDirection": "column",
+            "alignItems": "flex-end",  # right aligned
+            "justifyContent": "flex-start",
+            # "marginLeft": "auto",  # pushes component to the right!
         },
     )
 

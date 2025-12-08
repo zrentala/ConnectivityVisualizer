@@ -9,7 +9,7 @@ def create_layout(n_mat, initial_fig):
     """Responsive layout that fits the viewport and keeps margins/padding (no fixed pixels)."""
     threshold_comp = create_thresh_component()
     viz_controls = create_viz_controls(n_mat=n_mat)
-    data_component = create_data_component(n_mat= n_mat)
+    data_component = create_data_component()
     stat_component = create_stat_component()
 
     left = html.Div(
@@ -46,17 +46,12 @@ def create_layout(n_mat, initial_fig):
                 ],
                 id="right-figure-container",
                 style={"height": "100%", "flex": "1 1 auto", "minWidth": 0},
+                className="m-3"
             ),
 
             html.Div(
                 create_stat_component(),
                 id="right-stats-container",
-                style = {
-                    "display": "flex",
-                    "flexDirection": "row",
-                    "height": "100%",
-                    "flex": "0 0 260px",  # collapses smoothly
-                }
 
             ),
         ],

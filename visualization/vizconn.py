@@ -18,6 +18,7 @@ from itertools import product
 import visualization.vizhelpers as helpers
 from visualization.vizhelpers import VizType, UpdateType, Channel
 
+
 class ConnectivityView(ABC):
 
     def __init__(
@@ -190,15 +191,21 @@ class ConnectivityViewHeatmap(ConnectivityView):
                 tickangle=45,
                 showgrid=False,
                 zeroline=False,
+                automargin=True,
+                constrain='domain',
+
             ),
             yaxis=dict(
                 title="From",
                 autorange="reversed",
                 showgrid=False,
                 zeroline=False,
+                automargin=True,
+                constrain='domain',
+
             ),
             autosize=True,
-            margin=dict(l=60, r=20, t=100, b=80),
+            margin=dict(l=60, r=20, t=100, b=200),
             plot_bgcolor="white",
         )
 
