@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 
 from dash import no_update
-
-from data.simulation import Simulation
+from scipy.io import loadmat
+from data.simulation import *
 from utils.braindata import BrainData
 from utils.global_app_state import GlobalAppState
 from visualization.vizuimanager import VizUIManager
@@ -27,253 +27,347 @@ PRESET_CONFIGS: Dict[str, Dict[str, Any]] = {
 
 
 @dataclass
-class SliderState:
-    max_idx: int
-    marks: Dict[int, str]
-    value: int
-
+class Meta:
+    name: str
+    source: str
+    extra: dict
 
 @dataclass
-class DatasetMeta:
-    name: str
-    source: str   # "uploaded", "preset", "simulated_custom", etc.
-    extra: Dict[str, Any]
-
+class SliderMeta:
+    max_idx: int
+    marks: dict
+    value: int = 0
 
 class DataLoader:
     """
-    Encapsulates all logic for constructing BrainData objects and
-    updating GlobalAppState when datasets change.
-
-    Responsibilities:
-      - Build BrainData from simulated configs
-      - Build BrainData from uploaded arrays
-      - Build BrainData from preset configs
-      - Provide slider metadata (max, marks, value)
-      - Provide safe "initial" UI state based on current global_state
+    Factory that assembles a BrainData instance.
+    Does NOT modify global state.
+    Returns: (BrainData, Meta, SliderMeta)
     """
 
-    def __init__(
+    def __init__(self, preset_configs=None):
+        self.preset_configs = PRESET_CONFIGS
+
+    # ============================================================
+    #  Public Entry Point
+    # ============================================================
+
+    def build_braindata(
         self,
-        global_state: GlobalAppState,
-        preset_configs: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> None:
-        self.global_state = global_state
-        self.preset_configs = preset_configs or PRESET_CONFIGS
+        fc_source: dict,
+        loc_source: dict,
+        directed: bool,
+        brain_mesh
+    ):
+        """
+        fc_source: {"type": "sim" | "preset" | "upload", ...}
+        loc_source: same
+        directed: bool
+        """
 
-    # ---------- Internal helpers ----------
+        # ---- Load FC ----
+        conn_mat, fc_meta, slider_meta = self._load_fc(fc_source)
 
-    def _brain_data_from_sim(self, cfg: Dict[str, Any]) -> BrainData:
-        sim = Simulation(cfg)
-        #### BIG ISSUE
-        montage = mne.channels.make_standard_montage("standard_alphabetic")
-        # Extract channel positions (in meters)
-        pos = montage.get_positions()["ch_pos"]  # dict: {label: [x,y,z]}
-        # print(pos)
-        # Convert into DataFrame
-        chanlocs = pd.DataFrame(
-            {
-                "label": list(pos.keys()),
-                "x": [coord[0] * 1000 for coord in pos.values()],  # convert to cm to match your scale
-                "y": [coord[1]  * 1000 for coord in pos.values()],
-                "z": [coord[2] * 1000 for coord in pos.values()],
-            }
+        # ---- Load LOC ----
+        chanlocs, loc_meta = self._load_locs(loc_source)
+
+        # ---- Create BrainData instance ----
+        bd = BrainData(
+            conn_mat=conn_mat,
+            chanlocs=chanlocs,
+            brain_mesh=brain_mesh,
+            directed=directed,
         )
-        del montage
-        # chanlocs = pd.DataFrame(
-        #     {
-        #         "label": [f"E{i}" for i in range(sim.n_elec)],
-        #         "x": sim.locations[:, 0] * 100,
-        #         "y": sim.locations[:, 1] * 100,
-        #         "z": sim.locations[:, 2] * 100,
-        #     }
-        # )
-        brain_mesh = sim.build_brain_mesh()
-        return BrainData(sim.conn_matrices, chanlocs, brain_mesh, directed=sim.is_directed)
 
-    def _brain_data_from_uploaded_array(self, arr: np.ndarray) -> BrainData:
-        """
-        Build a BrainData object from a 3D connectivity array of shape (n_mat, n_elec, n_elec).
-        """
-        if arr.ndim != 3:
-            raise ValueError("Uploaded data must be 3D: (n_mat, n_elec, n_elec)")
+        # combine metadata
+        combined_meta = {
+            "fc": fc_meta,
+            "loc": loc_meta,
+            "directed": directed,
+        }
+
+        return bd, combined_meta, slider_meta
+
+    # ============================================================
+    #  FC ROUTING
+    # ============================================================
+
+    def _load_fc(self, cfg):
+        t = cfg["type"]
+
+        if t == "sim":
+            return self._fc_sim(cfg)
+        elif t == "preset":
+            return self._fc_preset(cfg)
+        elif t == "upload":
+            return self._fc_upload(cfg)
+        else:
+            raise ValueError(f"Unknown FC type: {t}")
+
+    def _fc_sim(self, cfg):
+        n_mat = cfg["n_mat"]
+        n_elec = cfg["n_elec"]
+        directed = cfg["directed"]
+
+        conn = generate_conn(n_mat, n_elec, directed)
+
+        meta = Meta(
+            name=f"Simulated FC ({n_elec}x{n_elec}, {n_mat} mats)",
+            source="sim",
+            extra={"n_mat": n_mat, "n_elec": n_elec, "directed": directed},
+        )
+
+        slider = SliderMeta(
+            max_idx=n_mat - 1,
+            marks={i: str(i) for i in range(n_mat)},
+            value=0,
+        )
+
+        return conn, meta, slider
+
+    def _fc_preset(self, cfg):
+        name = cfg["name"]
+        preset = self.preset_configs[name]
+
+        conn = generate_conn(
+            preset["n_mat"], preset["n_elec"], preset["directed"]
+        )
+
+        meta = Meta(
+            name=f"{name} (preset FC)",
+            source="preset",
+            extra=preset,
+        )
+
+        slider = SliderMeta(
+            max_idx=preset["n_mat"] - 1,
+            marks={i: str(i) for i in range(preset["n_mat"])},
+            value=0,
+        )
+
+        return conn, meta, slider
+
+    def _fc_upload(self, cfg):
+        contents = cfg["contents"]
+        filename = cfg["filename"]
+
+        buf = decode_uploaded(contents, filename)
+        arr = load_connectivity(buf)
+
+        # Ensure 3D format
+        if arr.ndim == 2:
+            arr = arr[np.newaxis, ...]
 
         n_mat, n_elec, _ = arr.shape
-        angles = np.linspace(0, 2 * np.pi, n_elec, endpoint=False)
-        x = np.cos(angles)
-        y = np.sin(angles)
-        z = np.zeros_like(x)
 
-        chanlocs = pd.DataFrame(
-            {
-                "label": [f"E{i}" for i in range(n_elec)],
-                "x": x * 100,
-                "y": y * 100,
-                "z": z,
-            }
+        meta = Meta(
+            name=f"{filename} (uploaded FC)",
+            source="upload",
+            extra={"n_mat": n_mat, "n_elec": n_elec},
         )
-        brain_mesh = None
-        return BrainData(arr, chanlocs, brain_mesh, directed=False)
 
-    def _slider_state_from_brain_data(
-        self,
-        brain_data: BrainData,
-        current_value: int | None = 0,
-    ) -> SliderState:
-        """
-        Given a BrainData, compute reasonable slider settings for matrix index.
-        """
-        conn = brain_data.conn_mat  # your BrainData uses .conn_mat
-        n_frames = int(conn.shape[0])
-        max_idx = max(n_frames - 1, 0)
-        marks = {0: "0", max_idx: str(max_idx)} if n_frames > 1 else {0: "0"}
-        value = min(current_value or 0, max_idx)
-        return SliderState(max_idx=max_idx, marks=marks, value=value)
+        slider = SliderMeta(
+            max_idx=n_mat - 1,
+            marks={i: str(i) for i in range(n_mat)},
+            value=0,
+        )
 
-    # ---------- Public API used by callbacks ----------
+        return arr, meta, slider
 
-    def initial_ui_state(
-        self,
-        store_data: Optional[Dict[str, Any]],
-        slider_max: Optional[int],
-        slider_marks: Optional[Dict[int, str]],
-        slider_value: Optional[int],
-    ) -> Tuple[str, Dict[str, Any] | None, SliderState]:
-        """
-        Compute initial label + slider state when the app / component first loads.
-        """
-        label = (store_data or {}).get("name") or "No dataset loaded"
+    # ============================================================
+    #  LOCATION ROUTING
+    # ============================================================
 
-        try:
-            brain_data = self.global_state.brain_data
-            slider = self._slider_state_from_brain_data(brain_data, slider_value)
-        except Exception:
-            # Fallback to whatever Dash already has
-            max_idx = slider_max or 0
-            marks = slider_marks or {0: "0"}
-            value = slider_value or 0
-            slider = SliderState(max_idx=max_idx, marks=marks, value=value)
+    def _load_locs(self, cfg):
+        t = cfg["type"]
 
-        return label, store_data, slider
-
-    def load_uploaded(
-        self,
-        contents: str,
-        filename: Optional[str],
-        previous_store: Optional[Dict[str, Any]],
-    ) -> Tuple[DatasetMeta, SliderState]:
-        """
-        Handle option 1: "Load your own".
-        Decodes Dash upload contents, builds BrainData, updates global_state.
-        Raises ValueError on failure.
-        """
-        if contents is None:
-            raise ValueError("No upload contents provided.")
-
-        try:
-            _, content_string = contents.split(",", 1)
-        except ValueError:
-            raise ValueError("Upload contents not in expected 'data:...;base64,...' format.")
-
-        decoded = base64.b64decode(content_string)
-        buffer = io.BytesIO(decoded)
-        loaded = np.load(buffer, allow_pickle=True)
-
-        if isinstance(loaded, np.lib.npyio.NpzFile):
-            if "conn" not in loaded:
-                raise ValueError("NPZ file must contain a 'conn' array.")
-            conn = loaded["conn"]
+        if t == "sim":
+            return self._loc_sim(cfg)
+        elif t == "preset":
+            return self._loc_preset(cfg)
+        elif t == "upload":
+            return self._loc_upload(cfg)
         else:
-            conn = loaded
+            raise ValueError(f"Unknown loc type: {t}")
 
-        brain_data = self._brain_data_from_uploaded_array(conn)
-        self.global_state.brain_data = brain_data
-        self.global_state.viz = VizUIManager(self.global_state.brain_data, self.global_state.threshold)
+    def _loc_sim(self, cfg):
+        sim = Simulation(cfg["sim_cfg"])
+        df = load_locs_simulated(sim)
 
-        slider = self._slider_state_from_brain_data(brain_data, current_value=0)
-        ds_name = filename or "Uploaded dataset"
-        meta = DatasetMeta(
-            name=ds_name,
-            source="uploaded",
-            extra={},
+        meta = Meta(
+            name="Simulated locations",
+            source="sim",
+            extra={"n_elec": len(df)},
         )
-        return meta, slider
 
-    def load_preset(
-        self,
-        preset_key: str,
-    ) -> Tuple[DatasetMeta, SliderState]:
-        """
-        Handle option 2: "Choose from preset".
-        """
-        cfg = self.preset_configs.get(preset_key)
-        if cfg is None:
-            raise KeyError(f"Unknown preset key: {preset_key}")
+        return df, meta
 
-        brain_data = self._brain_data_from_sim(cfg)
-        self.global_state.brain_data = brain_data
-        self.global_state.viz = VizUIManager(self.global_state.brain_data, self.global_state.threshold)
+    def _loc_preset(self, cfg):
+        name = cfg["name"]
+        df = load_locs_preset(name)
 
-        slider = self._slider_state_from_brain_data(brain_data, current_value=0)
-        ds_name = f"Preset: {preset_key}"
-        meta = DatasetMeta(
-            name=ds_name,
+        meta = Meta(
+            name=f"{name} (preset locs)",
             source="preset",
-            extra={"preset": preset_key, "cfg": cfg},
+            extra={"n_elec": len(df)},
         )
-        return meta, slider
 
-    def load_simulated_custom(
-        self,
-        n_elec: Optional[int],
-        n_mat: Optional[int],
-        directed: Optional[bool],
-    ) -> Tuple[DatasetMeta, SliderState]:
-        """
-        Handle option 3: "Generate your own".
-        Falls back to defaults if values are None.
-        """
-        n_elec = int(n_elec) if n_elec is not None else 20
-        n_mat = int(n_mat) if n_mat is not None else 10
-        directed_flag = bool(directed)
+        return df, meta
 
-        cfg = {"n_elec": n_elec, "directed": directed_flag, "n_mat": n_mat}
-        brain_data = self._brain_data_from_sim(cfg)
-        self.global_state.brain_data = brain_data
-        self.global_state.viz = VizUIManager(self.global_state.brain_data, self.global_state.threshold)
+    def _loc_upload(self, cfg):
+        contents = cfg["contents"]
+        filename = cfg["filename"]
 
-        slider = self._slider_state_from_brain_data(brain_data, current_value=0)
-        ds_name = f"Simulated (n={n_elec}, mats={n_mat}, directed={directed_flag})"
-        meta = DatasetMeta(
-            name=ds_name,
-            source="simulated_custom",
-            extra={"cfg": cfg},
+        buf = decode_uploaded(contents, filename)
+        df = load_locs_input(buf)
+
+        meta = Meta(
+            name=f"{filename} (uploaded locs)",
+            source="upload",
+            extra={"n_elec": len(df)},
         )
-        return meta, slider
-def load_channel_locations(path):
+
+        return df, meta
+
+
+
+def decode_uploaded(contents, filename):
+    content_type, b64data = contents.split(',')
+    raw = base64.b64decode(b64data)
+    buf = io.BytesIO(raw)
+    buf.name = filename
+    return buf
+
+
+### HANDLE FC MATRIX
+
+## right now use simualted but evently will connect to real data
+def load_conn_mat_preset(kind: str):
+    cfg = PRESET_CONFIGS[kind]
+    return generate_conn(cfg["n_mat", cfg['n_elec']], cfg['directed'])
+
+## 
+def load_conn_mat_sim(cfg):
+    keys = ['n_mat', 'n_elec', 'directed']
+    if not all(k in cfg for k in keys):
+        KeyError(f"Config input: {cfg} has an incorrect key")
+    return generate_conn(cfg["n_mat", cfg['n_elec']], cfg['directed'])
+
+##  from input
+# ---------------------------
+def load_connectivity(path: str | Path) -> np.ndarray:
+    """Load connectivity matrix from .npy, .npz, .csv, or .mat"""
+    path = Path(path)
+    ext = path.suffix.lower()
+
+    # -------- .npy --------
+    if ext == ".npy":
+        return np.load(path)
+
+    # -------- .npz --------
+    elif ext == ".npz":
+        data = np.load(path)
+        if "conn" in data:
+            return data["conn"]
+        # fallback: return first ndarray
+        for key in data:
+            if isinstance(data[key], np.ndarray):
+                return data[key]
+        raise KeyError("No valid array found in .npz file.")
+
+    # -------- .csv --------
+    elif ext == ".csv":
+        arr = np.loadtxt(path, delimiter=",")
+        # If it's a flat 2D matrix, wrap into (1, n, n)
+        if arr.ndim == 2:
+            return arr[np.newaxis, ...]
+        return arr
+
+    # -------- .mat --------
+    elif ext == ".mat":
+        data = loadmat(path)
+        for key, val in data.items():
+            if not key.startswith("__") and isinstance(val, np.ndarray):
+                return val
+        raise KeyError("No valid matrix found in .mat file.")
+
+    else:
+        raise ValueError(f"Unsupported file type: {ext}")
+
+
+
+### HANDLE LOCS
+def locs_dict_to_dataframe(pos: dict):
+    """
+    Convert a dict {label: [x, y, z]} in meters to a standardized
+    Pandas DataFrame in millimeters.
+    """
+    return pd.DataFrame({
+        "label": list(pos.keys()),
+        "x": [coord[0] * 1000 for coord in pos.values()],
+        "y": [coord[1] * 1000 for coord in pos.values()],
+        "z": [coord[2] * 1000 for coord in pos.values()],
+    })
+
+def load_locs_preset(kind: str):
+    montage = mne.channels.make_standard_montage(kind)
+    pos = montage.get_positions()["ch_pos"]
+    return locs_dict_to_dataframe(pos)
+    
+def load_locs_simulated(sim: Simulation):
+    pos = sim.get_sensor_positions()  # dict like {"Fz":[x,y,z], ...}
+    return locs_dict_to_dataframe(pos)
+
+
+def load_locs_input(path):
     path = str(path).lower()
 
-    # 1) EEGLAB SET
+    # ---------------------------
+    # EEG/standard montage formats
+    # ---------------------------
     if path.endswith(".set"):
         raw = mne.io.read_raw_eeglab(path, preload=False)
-        return raw.get_montage()
+        montage = raw.get_montage()
 
-    # 2) BrainVision
-    if path.endswith(".vhdr"):
+    elif path.endswith(".vhdr"):
         raw = mne.io.read_raw_brainvision(path, preload=False)
-        return raw.get_montage()
+        montage = raw.get_montage()
 
-    # 3) BioSemi / EDF / formats without coords → require montage
-    if path.endswith(".bdf") or path.endswith(".edf"):
+    elif path.endswith((".bdf", ".edf")):
         raw = mne.io.read_raw(path, preload=False)
-        return raw.get_montage()
+        montage = raw.get_montage()
 
-    # 4) Direct montage files
-    if path.endswith((".ced", ".locs", ".elc", ".elp", ".sfp")):
-        return mne.channels.read_custom_montage(path)
+    # ---------------------------
+    # CSV / TXT custom coordinates
+    # ---------------------------
+    elif path.endswith((".csv", ".txt")):
+        df = pd.read_csv(path)
 
-    # 5) CSV / TXT
-    if path.endswith(".csv") or path.endswith(".txt"):
-        return mne.channels.read_custom_montage(path)
+        required = {"label", "x", "y", "z"}
+        if not required.issubset(df.columns):
+            raise ValueError(
+                f"CSV must contain columns: {required}, but has: {set(df.columns)}"
+            )
 
-    raise ValueError(f"Unsupported channel location format: {path}")
+        # Convert DataFrame → dict({label: [x,y,z]})
+        pos = {
+            row["label"]: np.array([row["x"], row["y"], row["z"]], dtype=float)
+            for _, row in df.iterrows()
+        }
+
+        return locs_dict_to_dataframe(pos)
+
+    # ---------------------------
+    # Other montage files (ced, locs, elc, etc.)
+    # ---------------------------
+    elif path.endswith((".ced", ".locs", ".elc", ".elp", ".sfp")):
+        montage = mne.channels.read_custom_montage(path)
+
+    else:
+        raise ValueError(f"Unsupported channel location format: {path}")
+
+    # --------------------------------------------------------
+    # Extract MNE montage → dictionary → DataFrame conversion
+    # --------------------------------------------------------
+    pos = montage.get_positions()["ch_pos"]  # {label: np.array([x,y,z])}
+    return locs_dict_to_dataframe(pos)

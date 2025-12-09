@@ -1,4 +1,4 @@
-from data.simulation import Simulation
+from data.simulation import *
 import dash_bootstrap_components as dbc
 from visualization.vizuimanager import VizUIManager
 from dash import Dash
@@ -41,7 +41,7 @@ class GlobalAppState:
         #     }
         # )
 
-        brain_mesh = data.build_brain_mesh()
+        brain_mesh = build_brain_mesh()
         self.brain_data = BrainData(data.conn_matrices, chanlocs, brain_mesh, directed=False)
         # print( self.brain_data)
         self.threshold = Threshold()

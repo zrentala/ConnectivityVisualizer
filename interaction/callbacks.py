@@ -17,13 +17,6 @@ from data.simulation import Simulation
 from utils.braindata import BrainData
 import pandas as pd
 
-PRESET_CONFIGS = {
-    "small_undirected": {"n_elec": 10, "directed": False, "n_mat": 5},
-    "medium_directed": {"n_elec": 20, "directed": True, "n_mat": 10},
-    "large_undirected": {"n_elec": 64, "directed": False, "n_mat": 20},
-}
-
-
 def determine_update_type_from_trigger(trigger_id: str) -> UpdateType:
 
     # Threshold changes
@@ -219,234 +212,6 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             visible_edges,
         )
 
-
-    
-def _brain_data_from_sim(cfg: dict) -> BrainData:
-    sim = Simulation(cfg)
-    chanlocs = pd.DataFrame(
-        {
-            "label": [f"E{i}" for i in range(sim.n_elec)],
-            "x": sim.locations[:, 0] * 100,
-            "y": sim.locations[:, 1] * 100,
-            "z": sim.locations[:, 2] * 100,
-        }
-    )
-    brain_mesh = sim.build_brain_mesh()
-    return BrainData(sim.conn_matrices, chanlocs, brain_mesh, directed=sim.is_directed)
-
-
-def _brain_data_from_uploaded_array(arr: np.ndarray) -> BrainData:
-    """
-    Build a BrainData object from a 3D connectivity array of shape (n_mat, n_elec, n_elec).
-    """
-    if arr.ndim != 3:
-        raise ValueError("Uploaded data must be 3D: (n_mat, n_elec, n_elec)")
-
-    n_mat, n_elec, _ = arr.shape
-    angles = np.linspace(0, 2 * np.pi, n_elec, endpoint=False)
-    x = np.cos(angles)
-    y = np.sin(angles)
-    z = np.zeros_like(x)
-
-    chanlocs = pd.DataFrame(
-        {
-            "label": [f"E{i}" for i in range(n_elec)],
-            "x": x * 100,
-            "y": y * 100,
-            "z": z,
-        }
-    )
-    brain_mesh = None
-    return BrainData(arr, chanlocs, brain_mesh, directed=False)
-
- 
-# def register_data_callbacks(app: Dash, global_state: GlobalAppState):
-#     modal_id = "data-modal"
-#     btn_id = "data-add_dataset-button"
-#     close_id = "data-modal-close-button"
-#     upload_id = "data-modal-upload"
-#     preset_id = "data-modal-dataset_preset-dropdown"
-#     gen_btn_id = "data-modal-gen-button"
-#     gen_n_elec_id = "data-modal-gen_n_elec-input"
-#     gen_n_mat_id = "data-modal-gen_n_mats-input"
-#     gen_directed_id = "data-modal-gen_directed-checkbox"
-#     label_id = "data-dataset-label"
-#     store_id = "data-store"
-#     slider_id = "data-conn_idx-slider"
-
-#     loader = DataLoader(global_state, preset_configs=PRESET_CONFIGS)
-
-#     @app.callback(
-#         Output(modal_id, "is_open"),
-#         Output(label_id, "children"),
-#         Output(store_id, "data"),
-#         Output(slider_id, "max"),
-#         Output(slider_id, "marks"),
-#         Output(slider_id, "value"),
-#         Input(btn_id, "n_clicks"),
-#         Input(close_id, "n_clicks"),
-#         Input(upload_id, "contents"),
-#         Input(preset_id, "value"),
-#         Input(gen_btn_id, "n_clicks"),
-#         State(upload_id, "filename"),
-#         State(modal_id, "is_open"),
-#         State(store_id, "data"),
-#         State(slider_id, "max"),
-#         State(slider_id, "marks"),
-#         State(slider_id, "value"),
-#         State(gen_n_elec_id, "value"),
-#         State(gen_n_mat_id, "value"),
-#         State(gen_directed_id, "value"),
-#         prevent_initial_call=False,
-#     )
-#     def data_modal_and_dataset(
-#         open_clicks,
-#         close_clicks,
-#         upload_contents,
-#         preset_value,
-#         gen_clicks,
-#         filename,
-#         is_open,
-#         store_data,
-#         slider_max,
-#         slider_marks,
-#         slider_value,
-#         gen_n_elec,
-#         gen_n_mat,
-#         gen_directed,
-#     ):
-#         ctx = callback_context
-
-#         # ---------- Initial load ----------
-#         if not ctx.triggered:
-#             label, store, slider = loader.initial_ui_state(
-#                 store_data,
-#                 slider_max,
-#                 slider_marks,
-#                 slider_value,
-#             )
-#             return (
-#                 is_open,
-#                 label,
-#                 store,
-#                 slider.max_idx,
-#                 slider.marks,
-#                 slider.value,
-#             )
-
-#         trigger = ctx.triggered[0]["prop_id"].split(".")[0]
-
-#         # ---------- Case 1: modal toggle (+ / Close) ----------
-#         if trigger in (btn_id, close_id):
-#             new_is_open = not (is_open or False)
-#             label = (store_data or {}).get("name") or "No dataset loaded"
-#             return (
-#                 new_is_open,
-#                 label,
-#                 store_data,
-#                 slider_max,
-#                 slider_marks,
-#                 slider_value,
-#             )
-
-#         # ---------- Case 2: option 1 – upload your own ----------
-#         if trigger == upload_id and upload_contents is not None:
-#             try:
-#                 meta, slider = loader.load_uploaded(upload_contents, filename, store_data)
-#                 new_store = {
-#                     "name": meta.name,
-#                     "source": meta.source,
-#                     **meta.extra,
-#                 }
-#                 return (
-#                     False,              # close modal
-#                     meta.name,
-#                     new_store,
-#                     slider.max_idx,
-#                     slider.marks,
-#                     slider.value,
-#                 )
-#             except Exception as exc:
-#                 label = f"Upload failed: {exc}"
-#                 return (
-#                     False,
-#                     label,
-#                     store_data,
-#                     slider_max,
-#                     slider_marks,
-#                     slider_value,
-#                 )
-
-#         # ---------- Case 3: option 2 – preset dataset ----------
-#         if trigger == preset_id and preset_value:
-#             try:
-#                 meta, slider = loader.load_preset(preset_value)
-#                 new_store = {
-#                     "name": meta.name,
-#                     "source": meta.source,
-#                     **meta.extra,
-#                 }
-#                 return (
-#                     False,
-#                     meta.name,
-#                     new_store,
-#                     slider.max_idx,
-#                     slider.marks,
-#                     slider.value,
-#                 )
-#             except Exception as exc:
-#                 label = f"Preset failed: {exc}"
-#                 return (
-#                     False,
-#                     label,
-#                     store_data,
-#                     slider_max,
-#                     slider_marks,
-#                     slider_value,
-#                 )
-
-#         # ---------- Case 4: option 3 – generate your own ----------
-#         if trigger == gen_btn_id:
-#             try:
-#                 meta, slider = loader.load_simulated_custom(
-#                     n_elec=gen_n_elec,
-#                     n_mat=gen_n_mat,
-#                     directed=gen_directed,
-#                 )
-#                 new_store = {
-#                     "name": meta.name,
-#                     "source": meta.source,
-#                     **meta.extra,
-#                 }
-#                 return (
-#                     False,
-#                     meta.name,
-#                     new_store,
-#                     slider.max_idx,
-#                     slider.marks,
-#                     slider.value,
-#                 )
-#             except Exception as exc:
-#                 label = f"Simulation failed: {exc}"
-#                 return (
-#                     False,
-#                     label,
-#                     store_data,
-#                     slider_max,
-#                     slider_marks,
-#                     slider_value,
-#                 )
-
-#         # ---------- Fallback: no-op ----------
-#         label = (store_data or {}).get("name") or "No dataset loaded"
-#         return (
-#             is_open,
-#             label,
-#             store_data,
-#             slider_max,
-#             slider_marks,
-#             slider_value,
-#         )
 def register_data_callbacks(app: Dash, global_state: GlobalAppState):
     modal_id = "data-modal"
     btn_id = "data-add_dataset-button"
@@ -462,7 +227,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
     loc_preset_id = "data-loc-preset-dropdown"
     loc_gen_btn_id = "data-loc-gen-btn"
 
-    # Step 3 – directed
+    # Step 3 – directed flag
     directed_id = "data-directed-checkbox"
 
     label_id = "data-dataset-label"
@@ -470,7 +235,15 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
     step_label_id = "data-step-indicator"
     slider_id = "data-conn_idx-slider"
 
-    loader = DataLoader(global_state, preset_configs=PRESET_CONFIGS)
+    loader = DataLoader()
+
+    def step_text(step: int) -> str:
+        return (
+            "Step 1: Load FC data" if step == 1 else
+            "Step 2: Load location data" if step == 2 else
+            "Step 3: Directed / undirected" if step == 3 else
+            "Completed"
+        )
 
     @app.callback(
         Output(modal_id, "is_open"),
@@ -498,100 +271,149 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
         State(slider_id, "value"),
         prevent_initial_call=False,
     )
-    def handle_data_modal(
-        btn_click, close_click,
-        fc_contents, fc_preset, fc_gen_click,
-        loc_contents, loc_preset, loc_gen_click,
-        directed_val,
-        fc_filename, loc_filename,
-        is_open, store_data,
-        slider_max, slider_marks, slider_value,
-    ):
+    def handle_data_modal(*args):
+        (
+            btn_click, close_click,
+            fc_contents, fc_preset, fc_gen_click,
+            loc_contents, loc_preset, loc_gen_click,
+            directed_val,
+            fc_filename, loc_filename,
+            is_open, store_data,
+            slider_max, slider_marks, slider_value
+        ) = args
+
+        # --- Normalize stored modal state ---
+        if not isinstance(store_data, dict):
+            store_data = {}
+        # store_data = store_data or {}
+        store_data.setdefault("fc", {})
+        store_data.setdefault("loc", {})
+        # store_data.setdefault("brain", {})
+        store_data.setdefault("directed", False)
+        store_data.setdefault("step", 1)
+        print(store_data)
+
         ctx = callback_context
         trigger = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
 
-        # Normalize store_data
-        if not store_data:
-            store_data = {"step": 1, "fc": None, "loc": None, "directed": None}
-        else:
-            store_data.setdefault("step", 1)
-            store_data.setdefault("fc", None)
-            store_data.setdefault("loc", None)
-            store_data.setdefault("directed", None)
-        ctx = callback_context
-        trigger = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
+        
 
-        # Normalize store_data
-        if not store_data:
-            store_data = {"step": 1, "fc": None, "loc": None, "directed": None}
-        else:
-            store_data.setdefault("step", 1)
-            store_data.setdefault("fc", None)
-            store_data.setdefault("loc", None)
-            store_data.setdefault("directed", None)
-
-
-        # ---------- Case: Open/Close modal ----------
+        # ------------------------------------------------------------
+        # A. Modal open / close
+        # ------------------------------------------------------------
         if trigger in (btn_id, close_id):
-            new_is_open = not (is_open or False)
-            step_label = f"Step {store_data['step']}: " + \
-                ("Load FC data" if store_data["step"] == 1 else
-                "Load location data" if store_data["step"] == 2 else
-                "Directed / undirected")
-            return new_is_open, store_data.get("fc", "No dataset loaded"), store_data, step_label, slider_max, slider_marks, slider_value
+            return (
+                not (is_open or False),
+                store_data.get("fc", {}).get("name", "No dataset loaded"),
+                store_data,
+                step_text(store_data["step"]),
+                slider_max, slider_marks, slider_value
+            )
 
-        # ---------- Step 1: Functional connectivity ----------
+        # ------------------------------------------------------------
+        # B. STEP 1: Load FC data
+        # ------------------------------------------------------------
         if store_data["step"] == 1 and trigger in (fc_upload_id, fc_preset_id, fc_gen_btn_id):
             try:
+                # Uploaded FC file
                 if trigger == fc_upload_id and fc_contents:
                     meta, slider = loader.load_uploaded(fc_contents, fc_filename, store_data)
+
+                # Preset FC
                 elif trigger == fc_preset_id and fc_preset:
                     meta, slider = loader.load_preset(fc_preset)
+
+                # Generate FC data
                 elif trigger == fc_gen_btn_id:
-                    meta, slider = loader.load_simulated_custom(
-                        n_elec=20, n_mat=10, directed=False
-                    )
+                    meta, slider = loader.load_simulated_custom(n_elec=20, n_mat=10, directed=False)
+
                 else:
                     raise PreventUpdate
 
                 store_data["fc"] = {"name": meta.name, "source": meta.source, **meta.extra}
-                store_data["step"] = 2  # advance to next step
-                step_label = "Step 2: Load location data"
-                return is_open, meta.name, store_data, step_label, slider.max_idx, slider.marks, slider.value
-            except Exception as exc:
-                return is_open, f"FC load failed: {exc}", store_data, f"Step 1: Load FC data", slider_max, slider_marks, slider_value
+                store_data["step"] = 2
 
-        # ---------- Step 2: Location data ----------
+                return (
+                    is_open,
+                    meta.name,
+                    store_data,
+                    step_text(2),
+                    slider.max_idx, slider.marks, slider.value
+                )
+
+            except Exception as exc:
+                return (
+                    is_open,
+                    f"FC load failed: {exc}",
+                    store_data,
+                    step_text(1),
+                    slider_max, slider_marks, slider_value
+                )
+
+        # ------------------------------------------------------------
+        # C. STEP 2: Load location data
+        # ------------------------------------------------------------
         if store_data["step"] == 2 and trigger in (loc_upload_id, loc_preset_id, loc_gen_btn_id):
             try:
+                # Location uploaded
                 if trigger == loc_upload_id and loc_contents:
                     meta, _ = loader.load_location(loc_contents, loc_filename)
+
+                # Preset location
                 elif trigger == loc_preset_id and loc_preset:
                     meta, _ = loader.load_location_preset(loc_preset)
+
+                # Generated location
                 elif trigger == loc_gen_btn_id:
                     meta, _ = loader.load_location_simulated()
+
                 else:
                     raise PreventUpdate
 
                 store_data["loc"] = {"name": meta.name, "source": meta.source, **meta.extra}
-                store_data["step"] = 3  # advance to final step
-                step_label = "Step 3: Directed / undirected"
-                return is_open, store_data["fc"]["name"], store_data, step_label, slider_max, slider_marks, slider_value
-            except Exception as exc:
-                return is_open, f"Location load failed: {exc}", store_data, "Step 2: Load location data", slider_max, slider_marks, slider_value
+                store_data["step"] = 3
 
-        # ---------- Step 3: Directed / undirected ----------
+                return (
+                    is_open,
+                    store_data["fc"]["name"],
+                    store_data,
+                    step_text(3),
+                    slider_max, slider_marks, slider_value
+                )
+
+            except Exception as exc:
+                return (
+                    is_open,
+                    f"Location load failed: {exc}",
+                    store_data,
+                    step_text(2),
+                    slider_max, slider_marks, slider_value
+                )
+
+        # ------------------------------------------------------------
+        # D. STEP 3: Directed / Undirected
+        # ------------------------------------------------------------
         if store_data["step"] == 3 and trigger == directed_id:
             store_data["directed"] = bool(directed_val)
-            step_label = "Completed"
-            return is_open, store_data["fc"]["name"], store_data, step_label, slider_max, slider_marks, slider_value
 
-        # ---------- Fallback ----------
-        step_label = f"Step {store_data['step']}: " + \
-            ("Load FC data" if store_data["step"] == 1 else
-            "Load location data" if store_data["step"] == 2 else
-            "Directed / undirected")
-        return is_open, store_data.get("fc", "No dataset loaded"), store_data, step_label, slider_max, slider_marks, slider_value
+            return (
+                is_open,
+                store_data["fc"]["name"],
+                store_data,
+                step_text(4),
+                slider_max, slider_marks, slider_value
+            )
+
+        # ------------------------------------------------------------
+        # Fallback
+        # ------------------------------------------------------------
+        return (
+            is_open,
+            store_data.get("fc", {}).get("name", "No dataset loaded"),
+            store_data,
+            step_text(store_data["step"]),
+            slider_max, slider_marks, slider_value
+        )
 
 
 

@@ -319,7 +319,7 @@ def create_data_component() -> html.Div:
                                 ],
                                 clearable=True
                             ),
-                            dbc.Button("Generate FC data", id="data-fc-gen-btn", color="secondary", className="mt-2", n_clicks=0),
+                            dbc.Button("Simulate FC data", id="data-fc-gen-btn", color="secondary", className="mt-2", n_clicks=0),
                         ],
                         id="step-1-container", className="mb-3"
                     ),
@@ -368,7 +368,7 @@ def create_data_component() -> html.Div:
     )
 
     # Store for metadata
-    data_store = dcc.Store(id="data-store", data={"fc": None, "loc": None, "directed": None})
+    data_store = dcc.Store(id="data-store", data={"fc": {}, "loc": {}, "directed": False, 'step': 1})
 
     # Slider for FC matrices
     animation_slider = create_slider(id="data-conn_idx-slider", data_min=0, data_max=0, step=1, label="Connectivity Matrix Index", default=0)
