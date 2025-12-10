@@ -213,19 +213,18 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         )
 
 def register_data_callbacks(app: Dash, global_state: GlobalAppState):
+    loader = DataLoader()
+
     modal_id = "data-modal"
     btn_id = "data-add_dataset-button"
-    close_id = "data-modal-close-button"
     next_id = "data-next-button"
     back_id = "data-back-button"
 
-    # IDs for file / dropdown inputs
     fc_upload_id = "data-fc-upload"
     fc_preset_id = "data-fc-preset-dropdown"
     loc_upload_id = "data-loc-upload"
     loc_preset_id = "data-loc-preset-dropdown"
 
-    # Radio groups (dbc.RadioItems)
     fc_radio_id = "data-fc-radio"
     loc_radio_id = "data-loc-radio"
 
@@ -244,7 +243,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
     step1_view_id = "data-step1-view"
     step2_view_id = "data-step2-view"
 
-    # Card IDs for highlighting – must match create_data_component
+    # Card highlight IDs
     fc_upload_card_id = "data-fc-radio-upload-card"
     fc_preset_card_id = "data-fc-radio-preset-card"
     fc_sim_card_id = "data-fc-radio-sim-card"
@@ -252,61 +251,74 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
     loc_preset_card_id = "data-loc-radio-preset-card"
     loc_sim_card_id = "data-loc-radio-sim-card"
 
-    loader = DataLoader()
-
-    def overall_step_text(sd: dict) -> str:
-        if sd.get("fc") and sd.get("loc"):
-            return "Data loaded"
-        if sd.get("fc"):
-            return "Step 2: Load location data"
-        return "Step 1: Load FC data"
-
-    def fc_summary_text(sd: dict) -> str:
-        fc_meta = sd.get("fc") or {}
-        if not fc_meta:
-            return "No FC data loaded yet."
-        n_elec = fc_meta.get("n_elec") or fc_meta.get("n_elecs")
-        n_mat = fc_meta.get("n_mat") or fc_meta.get("n_mats")
-        directed = fc_meta.get("directed", False)
-        d_str = "directed" if directed else "undirected"
-        return f"FC: n_elec={n_elec}, n_mats={n_mat}, {d_str}"
-
+    # ---------------------------------------------------
+    # Small helpers
+    # ---------------------------------------------------
     def current_label(sd: dict) -> str:
-        return sd.get("fc", {}).get("name", "No dataset loaded")
+        return (sd.get("fc") or {}).get("name", "No dataset loaded")
 
-    # ---------------------------
-    # Main state / loading logic
-    # ---------------------------
+    def fc_summary_text(sd):
+        fc = sd.get("fc_cfg")
+        if not fc:
+            return "No FC data loaded yet."
+        d = "directed" if fc.get("directed") else "undirected"
+        return f"FC: # electrodes = {fc.get('n_elec')}, # FC matrices={fc.get('n_mat')}, {d}"
+
+    def overall_step_text(sd):
+        step = sd.get("step", 1)
+        return "Step 1: Load FC data" if step == 1 else "Step 2: Load location data"
+
+    def card_classes(fc_src, loc_src):
+        base = "p-3 mb-2 border rounded bg-light"
+        sel = base + " border-primary shadow-sm"
+        return (
+            sel if fc_src == "upload" else base,
+            sel if fc_src == "preset" else base,
+            sel if fc_src == "simulate" else base,
+            sel if loc_src == "upload" else base,
+            sel if loc_src == "preset" else base,
+            sel if loc_src == "simulate" else base,
+        )
+
+    # ---------------------------------------------------
+    # MAIN CALLBACK
+    # ---------------------------------------------------
     @app.callback(
-        Output(modal_id, "is_open"),
-        Output(label_id, "children"),
-        Output(store_id, "data"),
-        Output(step_label_id, "children"),
-        Output(slider_id, "max"),
-        Output(slider_id, "marks"),
-        Output(slider_id, "value"),
-        Output(error_id, "children"),
-        Output(fc_summary_id, "children"),
-        Output(step1_view_id, "style"),
-        Output(step2_view_id, "style"),
-        # Card className outputs (blue outline highlight)
-        Output(fc_upload_card_id, "className"),
-        Output(fc_preset_card_id, "className"),
-        Output(fc_sim_card_id, "className"),
-        Output(loc_upload_card_id, "className"),
-        Output(loc_preset_card_id, "className"),
-        Output(loc_sim_card_id, "className"),
-        Input(btn_id, "n_clicks"),
-        Input(close_id, "n_clicks"),
-        Input(next_id, "n_clicks"),
-        Input(back_id, "n_clicks"),
-        Input(fc_upload_id, "contents"),
-        Input(fc_preset_id, "value"),
-        Input(loc_upload_id, "contents"),
-        Input(loc_preset_id, "value"),
-        Input(fc_radio_id, "value"),
-        Input(loc_radio_id, "value"),
-        Input(directed_id, "value"),
+        (
+            Output(modal_id, "is_open"),
+            Output(label_id, "children"),
+            Output(store_id, "data"),
+            Output(step_label_id, "children"),
+            Output(slider_id, "max"),
+            Output(slider_id, "marks"),
+            Output(slider_id, "value"),
+            Output(error_id, "children"),
+            Output(fc_summary_id, "children"),
+            Output(step1_view_id, "style"),
+            Output(step2_view_id, "style"),
+            Output(next_id, "children"),
+            Output(back_id, "style"),
+            
+            # Card classes
+            Output(fc_upload_card_id, "className"),
+            Output(fc_preset_card_id, "className"),
+            Output(fc_sim_card_id, "className"),
+            Output(loc_upload_card_id, "className"),
+            Output(loc_preset_card_id, "className"),
+            Output(loc_sim_card_id, "className"),
+        ),
+        (
+            Input(btn_id, "n_clicks"),
+            Input(next_id, "n_clicks"),
+            Input(back_id, "n_clicks"),
+            Input(fc_upload_id, "contents"),
+            Input(fc_preset_id, "value"),
+            Input(loc_upload_id, "contents"),
+            Input(loc_preset_id, "value"),
+            Input(fc_radio_id, "value"),
+            Input(loc_radio_id, "value"),
+            Input(directed_id, "value"),
+        ),
         State(fc_sim_nelec_id, "value"),
         State(fc_sim_nmat_id, "value"),
         State(fc_upload_id, "filename"),
@@ -318,17 +330,16 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
         State(slider_id, "value"),
         prevent_initial_call=False,
     )
-    def handle_data_modal(
+    def handle_modal(
         btn_click,
-        close_click,
         next_click,
         back_click,
         fc_contents,
         fc_preset_val,
         loc_contents,
         loc_preset_val,
-        fc_radio_value,
-        loc_radio_value,
+        fc_radio_val,
+        loc_radio_val,
         directed_val,
         fc_sim_nelec,
         fc_sim_nmat,
@@ -338,67 +349,41 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
         store_data,
         slider_max,
         slider_marks,
-        slider_value,
+        slider_val,
     ):
+        # -------------------------
         # Normalize store
+        # -------------------------
         if not isinstance(store_data, dict):
             store_data = {}
-        store_data.setdefault("fc", {})
-        store_data.setdefault("loc", {})
-        store_data.setdefault("directed", False)
         store_data.setdefault("step", 1)
+        store_data.setdefault("fc_cfg", None)
+        store_data.setdefault("loc_cfg", None)
+        store_data.setdefault("fc_meta", None)
+        store_data.setdefault("loc_meta", None)
+        store_data.setdefault("directed", False)
 
         error_msg = ""
+
         ctx = callback_context
-        trigger = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
+        trig = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
 
-        # Current source selections
-        fc_source = fc_radio_value or "upload"
-        loc_source = loc_radio_value or "upload"
+        fc_src = fc_radio_val or "upload"
+        loc_src = loc_radio_val or "upload"
 
-        # Helper for card classes (blue outline)
-        base = "p-3 mb-2 border rounded bg-light"
-        selected = base + " border-primary shadow-sm"
+        # ---------------------------------------------------
+        # Open modal
+        # ---------------------------------------------------
+        if trig == btn_id:
+            is_open = not is_open
+            step = store_data["step"]
 
-        def card_classes():
-            fc_upload_cls = selected if fc_source == "upload" else base
-            fc_preset_cls = selected if fc_source == "preset" else base
-            fc_sim_cls = selected if fc_source == "simulate" else base
-
-            loc_upload_cls = selected if loc_source == "upload" else base
-            loc_preset_cls = selected if loc_source == "preset" else base
-            loc_sim_cls = selected if loc_source == "simulate" else base
-
-            return (
-                fc_upload_cls,
-                fc_preset_cls,
-                fc_sim_cls,
-                loc_upload_cls,
-                loc_preset_cls,
-                loc_sim_cls,
+            styles = (
+                {"display": "block"} if step == 1 else {"display": "none"}, # slide 1
+                {"display": "block"} if step == 2 else {"display": "none"}, # slide 2
             )
-
-        # ------------------------
-        # Open / close modal only
-        # ------------------------
-        if trigger in (btn_id, close_id):
-            if trigger == btn_id:
-                is_open = not (is_open or False)
-            else:
-                is_open = False
-
-            step = store_data.get("step", 1)
-            step1_style = {"display": "block"} if step == 1 else {"display": "none"}
-            step2_style = {"display": "block"} if step == 2 else {"display": "none"}
-
-            (
-                fc_upload_cls,
-                fc_preset_cls,
-                fc_sim_cls,
-                loc_upload_cls,
-                loc_preset_cls,
-                loc_sim_cls,
-            ) = card_classes()
+            next_text = "Submit" if step == 2 else "Next"
+            back_style = {"display": "block"} if step == 2 else {"display": "none"}
 
             return (
                 is_open,
@@ -407,148 +392,102 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
                 overall_step_text(store_data),
                 slider_max,
                 slider_marks,
-                slider_value,
+                slider_val,
                 error_msg,
                 fc_summary_text(store_data),
-                step1_style,
-                step2_style,
-                fc_upload_cls,
-                fc_preset_cls,
-                fc_sim_cls,
-                loc_upload_cls,
-                loc_preset_cls,
-                loc_sim_cls,
+                styles[0],
+                styles[1],
+                next_text,      # ← MISSING (Output 12)
+                back_style,     # ← MISSING (Output 13)
+                *card_classes(fc_src, loc_src),
             )
 
-        # ----------------------
-        # Immediate loads
-        # ----------------------
-        # STEP 1: upload/preset FC load immediately
-        if trigger in (fc_upload_id, fc_preset_id):
-            try:
-                if trigger == fc_upload_id and fc_source == "upload" and fc_contents:
-                    meta, slider = loader.load_uploaded(fc_contents, fc_filename, store_data)
-                elif trigger == fc_preset_id and fc_source == "preset" and fc_preset_val:
-                    meta, slider = loader.load_preset(fc_preset_val)
+
+        # ---------------------------------------------------
+        # Step navigation
+        # ---------------------------------------------------
+        if trig == back_id and store_data["step"] == 2:
+            store_data["step"] = 1
+
+        # ---------------------------------------------------
+        # NEXT → Step logic
+        # ---------------------------------------------------
+        if trig == next_id:
+
+            # -------------------------
+            # STEP 1 → Save FC config
+            # -------------------------
+            if store_data["step"] == 1:
+                fc_cfg = loader.make_fc_cfg(
+                    source=fc_src,
+                    upload=(fc_contents, fc_filename),
+                    preset=fc_preset_val,
+                    simulate=(fc_sim_nelec, fc_sim_nmat),
+                )
+                # print(fc_cfg)
+                if fc_cfg["type"] == "sim":
+                    fc_cfg["directed"] = bool(directed_val)
+
+                store_data["fc_cfg"] = fc_cfg
+                store_data["directed"] = bool(directed_val)
+
+                store_data["step"] = 2
+                # print(store_data)
+
+            # -------------------------
+            # STEP 2 → Save LOC config & BUILD DATASET
+            # -------------------------
+            elif store_data["step"] == 2:
+                if store_data["fc_cfg"]["type"] == "sim":
+                    print(store_data["fc_cfg"])
+                    n_elec = store_data["fc_cfg"]["n_elec"]
                 else:
-                    raise PreventUpdate
+                    n_elec = None
 
-                store_data["fc"] = {"name": meta.name, "source": meta.source, **meta.extra}
-                store_data["directed"] = store_data["fc"].get("directed", bool(directed_val))
-                slider_max = slider.max_idx
-                slider_marks = slider.marks
-                slider_value = slider.value
-                error_msg = ""
+                loc_cfg = loader.make_loc_cfg(
+                    source=loc_src,
+                    upload=(loc_contents, loc_filename),
+                    preset=loc_preset_val,
+                    n_elec=n_elec,
+                )
 
-            except PreventUpdate:
-                pass
-            except Exception as exc:
-                error_msg = f"FC load failed: {exc}"
+                # print(loc_cfg)
+                store_data["loc_cfg"] = loc_cfg
 
-        # STEP 2: upload/preset locations load immediately
-        if trigger in (loc_upload_id, loc_preset_id):
-            try:
-                if not store_data.get("fc"):
-                    raise RuntimeError("Load FC data in Step 1 before loading locations.")
-
-                if trigger == loc_upload_id and loc_source == "upload" and loc_contents:
-                    meta, _ = loader.load_location(loc_contents, loc_filename)
-                elif trigger == loc_preset_id and loc_source == "preset" and loc_preset_val:
-                    meta, _ = loader.load_location_preset(loc_preset_val)
-                else:
-                    raise PreventUpdate
-
-                # check n_elec consistency
-                fc_meta = store_data["fc"]
-                fc_nelec = fc_meta.get("n_elec") or fc_meta.get("n_elecs")
-                loc_nelec = meta.extra.get("n_elec") or meta.extra.get("n_elecs")
-                if fc_nelec is not None and loc_nelec is not None and fc_nelec != loc_nelec:
-                    raise ValueError(
-                        f"Location data has n_elec={loc_nelec}, but FC data has n_elec={fc_nelec}."
+                try:
+                    # Build the final dataset
+                    bd, meta, slider = loader.build_braindata(
+                        store_data["fc_cfg"],
+                        store_data["loc_cfg"],
+                        store_data["directed"],
                     )
 
-                store_data["loc"] = {"name": meta.name, "source": meta.source, **meta.extra}
-                error_msg = ""
+                    # Save into global_state
+                    global_state.brain_data = bd
+                    ## FIX
+                    global_state.viz.update_data(bd)
 
-            except PreventUpdate:
-                pass
-            except Exception as exc:
-                error_msg = f"Location load failed: {exc}"
+                    # Update store with metadata
+                    store_data["fc_meta"] = meta["fc"].__dict__
+                    store_data["loc_meta"] = meta["loc"].__dict__
 
-        # -------------
-        # Navigation + simulate on Next
-        # -------------
-        if trigger == next_id:
-            if store_data["step"] == 1:
-                # If simulate selected, generate FC here
-                if fc_source == "simulate":
-                    try:
-                        n_elec = int(fc_sim_nelec or 20)
-                        n_mat = int(fc_sim_nmat or 10)
-                        directed = bool(directed_val)
-                        meta, slider = loader.load_simulated_custom(
-                            n_elec=n_elec,
-                            n_mat=n_mat,
-                            directed=directed,
-                        )
-                        store_data["fc"] = {"name": meta.name, "source": meta.source, **meta.extra}
-                        store_data["directed"] = directed
-                        slider_max = slider.max_idx
-                        slider_marks = slider.marks
-                        slider_value = slider.value
-                        error_msg = ""
-                    except Exception as exc:
-                        error_msg = f"Simulation failed: {exc}"
+                    slider_max = slider.max_idx
+                    slider_marks = slider.marks
+                    slider_val = slider.value
 
-                # Require FC loaded
-                if not store_data.get("fc"):
-                    error_msg = error_msg or "Please load FC data before continuing."
-                else:
-                    store_data["step"] = 2
+                    is_open = False
 
-            elif store_data["step"] == 2:
-                # If simulate selected, generate locations here
-                if loc_source == "simulate":
-                    try:
-                        if not store_data.get("fc"):
-                            raise RuntimeError("Load FC data first.")
-                        meta, _ = loader.load_location_simulated()
-                        fc_meta = store_data["fc"]
-                        fc_nelec = fc_meta.get("n_elec") or fc_meta.get("n_elecs")
-                        loc_nelec = meta.extra.get("n_elec") or meta.extra.get("n_elecs")
-                        if fc_nelec is not None and loc_nelec is not None and fc_nelec != loc_nelec:
-                            raise ValueError(
-                                f"Simulated locations have n_elec={loc_nelec}, but FC data has n_elec={fc_nelec}."
-                            )
-                        store_data["loc"] = {"name": meta.name, "source": meta.source, **meta.extra}
-                        error_msg = ""
-                    except Exception as exc:
-                        error_msg = f"Location simulation failed: {exc}"
+                except Exception as exc:
+                    error_msg = f"Data load failed: {exc}"
 
-                # Require locations loaded
-                if not store_data.get("loc"):
-                    error_msg = error_msg or "Please load location data before finishing."
-                else:
-                    is_open = False  # everything done
-
-        elif trigger == back_id:
-            if store_data["step"] == 2:
-                store_data["step"] = 1
-                error_msg = ""
-
-        # Which step view is visible?
-        step = store_data.get("step", 1)
+        # ---------------------------------------------------
+        # Compute output UI state
+        # ---------------------------------------------------
+        step = store_data["step"]
         step1_style = {"display": "block"} if step == 1 else {"display": "none"}
         step2_style = {"display": "block"} if step == 2 else {"display": "none"}
-
-        (
-            fc_upload_cls,
-            fc_preset_cls,
-            fc_sim_cls,
-            loc_upload_cls,
-            loc_preset_cls,
-            loc_sim_cls,
-        ) = card_classes()
+        next_text = "Submit" if step == 2 else "Next"
+        back_style = {"display": "block"} if step == 2 else {"display": "none"}
 
         return (
             is_open,
@@ -557,17 +496,14 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
             overall_step_text(store_data),
             slider_max,
             slider_marks,
-            slider_value,
+            slider_val,
             error_msg,
             fc_summary_text(store_data),
             step1_style,
             step2_style,
-            fc_upload_cls,
-            fc_preset_cls,
-            fc_sim_cls,
-            loc_upload_cls,
-            loc_preset_cls,
-            loc_sim_cls,
+            next_text,      # ← MISSING (Output 12)
+            back_style,     # ← MISSING (Output 13)
+            *card_classes(fc_src, loc_src),
         )
 
 

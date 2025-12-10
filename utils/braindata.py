@@ -39,6 +39,8 @@ class BrainData:
         if "label" not in self.chanlocs.columns:
             raise KeyError("chanlocs must have a 'label' column.")
         if len(self.chanlocs) != n_nodes:
+            print(n_nodes)
+            print(self.chanlocs)
             raise ValueError(
                 f"chanlocs has {len(self.chanlocs)} rows but conn_mat implies {n_nodes} nodes."
             )

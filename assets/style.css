@@ -1,0 +1,10 @@
+#data-fc-radio .form-check,
+#data-loc-radio .form-check {
+    width: 100%;
+}
+
+#data-fc-radio .form-check-label,
+#data-loc-radio .form-check-label {
+    width: 100%;
+    display: block;
+}

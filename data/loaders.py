@@ -57,19 +57,23 @@ class DataLoader:
         fc_source: dict,
         loc_source: dict,
         directed: bool,
-        brain_mesh
+        brainmesh=None,
     ):
         """
         fc_source: {"type": "sim" | "preset" | "upload", ...}
         loc_source: same
         directed: bool
         """
-
+        print(f"{fc_source=}")
+        print(f"{loc_source=}")
         # ---- Load FC ----
         conn_mat, fc_meta, slider_meta = self._load_fc(fc_source)
 
         # ---- Load LOC ----
         chanlocs, loc_meta = self._load_locs(loc_source)
+
+        if brainmesh is None:
+            brain_mesh = build_brain_mesh()
 
         # ---- Create BrainData instance ----
         bd = BrainData(
@@ -87,6 +91,68 @@ class DataLoader:
         }
 
         return bd, combined_meta, slider_meta
+    
+    def make_fc_cfg(self, source, upload=None, preset=None, simulate=None):
+        if source == "upload":
+            contents, filename = upload
+            return {
+                "type": "upload",
+                "contents": contents,
+                "filename": filename,
+            }
+
+        if source == "preset":
+            return {
+                "type": "preset",
+                "name": preset
+            }
+
+        if source == "simulate":
+            n_elec, n_mat = simulate
+            return {
+                "type": "sim",
+                "n_elec": n_elec,
+                "n_mat": n_mat,
+                "directed": None,  # override in callback
+            }
+
+        raise ValueError(f"Unknown FC source: {source}")
+
+    # def make_loc_cfg(self, source, upload=None, preset=None):
+    #     if source == "upload":
+    #         contents, filename = upload
+    #         return {
+    #             "type": "upload",
+    #             "contents": contents,
+    #             "filename": filename,
+    #         }
+
+    #     if source == "preset":
+    #         return {"type": "preset", "name": preset}
+
+    #     if source == "simulate":
+    #         return {"type": "sim", "sim_cfg": {}}
+
+    #     raise ValueError(f"Unknown LOC source: {source}")
+    def make_loc_cfg(self, source, upload=None, preset=None, n_elec=None):
+        if source == "upload":
+            contents, filename = upload
+            return {
+                "type": "upload",
+                "contents": contents,
+                "filename": filename,
+            }
+
+        if source == "preset":
+            return {"type": "preset", "name": preset}
+
+        if source == "simulate":
+            if n_elec is None:
+                raise ValueError("LOC simulation requires n_elec for electrode count.")
+            return {"type": "sim", "sim_cfg": {"n_elec": n_elec}}
+
+        raise ValueError(f"Unknown LOC source: {source}")
+
 
     # ============================================================
     #  FC ROUTING
@@ -315,7 +381,7 @@ def load_locs_preset(kind: str):
     return locs_dict_to_dataframe(pos)
     
 def load_locs_simulated(sim: Simulation):
-    pos = sim.get_sensor_positions()  # dict like {"Fz":[x,y,z], ...}
+    pos = generate_locs(sim.n_elec)  # dict like {"Fz":[x,y,z], ...}
     return locs_dict_to_dataframe(pos)
 
 

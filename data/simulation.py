@@ -31,8 +31,14 @@ def generate_conn(n_mat: int, n_elec: int, directed: bool) -> np.ndarray:
     print(conns.shape)
     return conns
 
-def generate_locs(n_elec: int):
-    phi = np.random.uniform(0, np.pi * 2, n_elec)
+def generate_locs(n_elec: int, elec_names=None):
+    """
+    Generate random 3D electrode locations on/in a sphere, returning
+    a dict {electrode_name: np.array([x, y, z])}, matching
+    MNE's montage.get_positions()["ch_pos"] structure.
+    """
+    # Generate random spherical coordinates
+    phi = np.random.uniform(0, 2 * np.pi, n_elec)
     costheta = np.random.uniform(-1, 1, n_elec)
     theta = np.arccos(costheta)
     r = np.random.uniform(0, 1, n_elec) ** (1/3)
@@ -40,7 +46,17 @@ def generate_locs(n_elec: int):
     x = r * np.sin(theta) * np.cos(phi)
     y = r * np.sin(theta) * np.sin(phi)
     z = r * np.cos(theta)
-    return np.column_stack((x, y, z))
+
+    # Make names if needed
+    if elec_names is None:
+        elec_names = [f"E{i+1}" for i in range(n_elec)]
+    else:
+        if len(elec_names) != n_elec:
+            raise ValueError("Length of elec_names must match n_elec")
+
+    # Return dict like montage.get_positions()["ch_pos"]
+    return {name: np.array([xi, yi, zi]) 
+            for name, xi, yi, zi in zip(elec_names, x, y, z)}
 
 def build_brain_mesh() -> pv.PolyData:
     fs_dir = mne.datasets.fetch_fsaverage(verbose=True)

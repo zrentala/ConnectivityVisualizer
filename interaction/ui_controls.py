@@ -455,12 +455,12 @@ def create_data_component() -> html.Div:
                         html.H6("Simulated FC data"),
                         dbc.Row([
                             dbc.Col([
-                                dbc.Label("n_electrodes"),
+                                dbc.Label("# electrodes"),
                                 dbc.Input(id="data-fc-sim-nelec", type="number", value=20, min=1),
                             ], md=4),
 
                             dbc.Col([
-                                dbc.Label("n_mats"),
+                                dbc.Label("# FC matrices"),
                                 dbc.Input(id="data-fc-sim-nmat", type="number", value=10, min=1),
                             ], md=4),
 
@@ -469,7 +469,7 @@ def create_data_component() -> html.Div:
                                 dbc.Checkbox(id="data-directed-checkbox", value=False),
                             ], md=4),
                         ]),
-                        html.Div("Simulated FC will be generated on Next.", className="text-muted mt-2"),
+                        # html.Div("Simulated FC will be generated on Next.", className="text-muted mt-2"),
                     ],
                     className="p-3 mb-2 border rounded bg-light",
                 )
@@ -478,7 +478,7 @@ def create_data_component() -> html.Div:
 
         value="upload",
         inline=False,
-        className="radio-wrapped-group",
+        className="radio-wrapped-group w-100",
     )
 
 
@@ -488,6 +488,7 @@ def create_data_component() -> html.Div:
             html.H5("Step 1: Load functional connectivity (FC) data", className="mb-3"),
             fc_source
         ],
+        className="w-100"
     )
 
     # ---------- STEP 2: Locations ----------
@@ -531,14 +532,14 @@ def create_data_component() -> html.Div:
                     id="data-loc-radio-sim-card",
                     children=[
                         html.H6("Simulated locations"),
-                        html.Div("Locations will be generated based on FC when you click Next."),
+                        # html.Div("Locations will be generated based on FC when you click Next."),
                     ],
                     className="p-3 mb-2 border rounded bg-light",
                 )
             ]), "value": "simulate"},
         ],
         value="upload",
-        inline=False,
+        # inline=False,
     )
 
 
@@ -583,22 +584,12 @@ def create_data_component() -> html.Div:
                         className="me-2",
                     ),
                 ]),
-            dbc.ModalFooter(
-                [
-                    dbc.Button(
-                        "Close",
-                        id="data-modal-close-button",
-                        className="ms-2",
-                        n_clicks=0,
-                    ),
-                ]
-            ),
         ],
         id="data-modal",
         is_open=False,
         centered=True,
         backdrop="static",
-        size="lg",
+        size="",
     )
 
     data_store = dcc.Store(
