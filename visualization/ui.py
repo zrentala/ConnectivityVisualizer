@@ -3,18 +3,19 @@ from dash import html, dcc
 import dash_bootstrap_components as dbc
 from interaction.ui_controls import create_stat_component, create_thresh_component, create_viz_controls, create_data_component
 import dash_split_pane as dsp
+from plotly import graph_objs as go
 
 
-def create_layout(n_mat, initial_fig):
+def create_layout():
     """Responsive layout that fits the viewport and keeps margins/padding (no fixed pixels)."""
     threshold_comp = create_thresh_component()
-    viz_controls = create_viz_controls(n_mat=n_mat)
+    viz_controls = create_viz_controls()
     data_component = create_data_component()
     stat_component = create_stat_component()
+    initial_fig = None
 
     left = html.Div(
         [
-            html.H3("Controls / Info Panel", className="mb-3"),
             html.H4("Data Controls"),
             data_component,
             html.H4("Visualization Controls"),
@@ -31,7 +32,6 @@ def create_layout(n_mat, initial_fig):
         [
             html.Div(
                 [
-                    html.H3("Brain Connectivity Visualization", className="mb-3"),
                     dcc.Graph(
                         id="split-right-fig",
                         figure=initial_fig,
@@ -50,7 +50,7 @@ def create_layout(n_mat, initial_fig):
             ),
 
             html.Div(
-                create_stat_component(),
+                stat_component,
                 id="right-stats-container",
 
             ),

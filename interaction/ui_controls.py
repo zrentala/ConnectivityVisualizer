@@ -212,7 +212,7 @@ def create_3d_options() -> html.Div:
     )
 
 
-def create_viz_controls(n_mat: int) -> html.Div:
+def create_viz_controls() -> html.Div:
 
     viz_type_dropdown = create_dropdown(
         id="viz-fig_type-dropdown",
@@ -387,11 +387,11 @@ def create_viz_controls(n_mat: int) -> html.Div:
 def create_data_component() -> html.Div:
     """Two-step data selection UI (Step 1: FC, Step 2: locations) with radios wrapping each section."""
 
-    step_indicator = html.Div(
-        id="data-step-indicator",
-        children="Step 1: Load FC data",
-        className="mb-2 fw-bold",
-    )
+    # step_indicator = html.Div(
+    #     id="data-step-indicator",
+    #     children="Step 1: Load FC data",
+    #     className="mb-2 fw-bold",
+    # )
 
     add_data_button = dbc.Button(
         "+",
@@ -594,7 +594,7 @@ def create_data_component() -> html.Div:
 
     data_store = dcc.Store(
         id="data-store",
-        data={"fc": {}, "loc": {}, "directed": False, "step": 1},
+        data={"step": 1, "fc_cfg": {}, "loc_cfg": {}, "fc_meta": {}, "loc_meta": {}},
     )
 
     animation_slider = create_slider(
@@ -617,7 +617,7 @@ def create_data_component() -> html.Div:
                 ],
                 className="mb-3",
             ),
-            step_indicator,
+            # step_indicator,
             animation_slider,
             data_modal,
             data_store,
@@ -659,7 +659,7 @@ def create_stat_component():
                         ),
                     ],
                 ),
-
+            
             ),
         ],
         style={

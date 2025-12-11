@@ -25,6 +25,40 @@ PRESET_CONFIGS: Dict[str, Dict[str, Any]] = {
     "large_undirected": {"n_elec": 64, "directed": False, "n_mat": 20},
 }
 
+ESET_LOCS: Dict[str, int] = {
+    "standard_1005": 343,           # 10-05 system ~343 electrodes (EEG positions) :contentReference[oaicite:1]{index=1}
+    "standard_1020": 94,            # 10-20 system ~94 electrodes :contentReference[oaicite:2]{index=2}
+    "standard_alphabetic": 65,      # alphabetic labeling ~65 electrodes :contentReference[oaicite:3]{index=3}
+    "standard_postfixed": 100,      # postfix intermed. ~100 electrodes :contentReference[oaicite:4]{index=4}
+    "standard_prefixed": 74,        # prefix intermed. ~74 electrodes :contentReference[oaicite:5]{index=5}
+    "standard_primed": 100,         # primed ~100 electrodes :contentReference[oaicite:6]{index=6}
+
+    "biosemi16": 16,                # BioSemi 16 channels :contentReference[oaicite:7]{index=7}
+    "biosemi32": 32,                # BioSemi 32 channels :contentReference[oaicite:8]{index=8}
+    "biosemi64": 64,                # BioSemi 64 channels :contentReference[oaicite:9]{index=9}
+    "biosemi128": 128,              # BioSemi 128 channels :contentReference[oaicite:10]{index=10}
+    "biosemi160": 160,              # BioSemi 160 channels :contentReference[oaicite:11]{index=11}
+    "biosemi256": 256,              # BioSemi 256 channels :contentReference[oaicite:12]{index=12}
+
+    "easycap-M1": 74,               # EasyCap M1 ~74 electrodes :contentReference[oaicite:13]{index=13}
+    "easycap-M10": 61,              # EasyCap M10 ~61 electrodes :contentReference[oaicite:14]{index=14}
+    "easycap-M43": 64,              # EasyCap M43 ~64 electrodes (MNE listing) :contentReference[oaicite:15]{index=15}
+
+    "EGI_256": 256,                 # EGI Net 256 channels :contentReference[oaicite:16]{index=16}
+
+    "GSN-HydroCel-32": 33,          # HydroCel 32 + Cz (~33) :contentReference[oaicite:17]{index=17}
+    "GSN-HydroCel-64_1.0": 64,      # HydroCel 64 channels :contentReference[oaicite:18]{index=18}
+    "GSN-HydroCel-65_1.0": 65,      # HydroCel 64 + Cz (~65) :contentReference[oaicite:19]{index=19}
+    "GSN-HydroCel-128": 128,        # HydroCel 128 channels :contentReference[oaicite:20]{index=20}
+    "GSN-HydroCel-129": 129,        # HydroCel 128 + Cz (~129) :contentReference[oaicite:21]{index=21}
+    "GSN-HydroCel-256": 256,        # HydroCel 256 channels :contentReference[oaicite:22]{index=22}
+    "GSN-HydroCel-257": 257,        # HydroCel 256 + Cz (~257) :contentReference[oaicite:23]{index=23}
+
+    "mgh60": 60,                    # MGH 60 channels :contentReference[oaicite:24]{index=24}
+    "mgh70": 70,                    # MGH 70 channels :contentReference[oaicite:25]{index=25}
+
+    "artinis-octamon": 8            # Artinis OctaMon ~8 sources (not classic EEG) :contentReference[oaicite:26]{index=26}
+}
 
 @dataclass
 class Meta:

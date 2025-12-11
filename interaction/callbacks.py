@@ -19,6 +19,8 @@ import pandas as pd
 
 def determine_update_type_from_trigger(trigger_id: str) -> UpdateType:
 
+    # if not trigger_id or trigger_id == "data-add_dataset-button":
+    #     return UpdateType.NONE
     # Threshold changes
     if trigger_id in {
         "thresh-thresh_type-dropdown",
@@ -63,7 +65,6 @@ def determine_update_type_from_trigger(trigger_id: str) -> UpdateType:
     return UpdateType.NONE
 
 def register_visualization_callback(app: Dash, global_state: GlobalAppState):
-    n_frames = int(global_state.brain_data.conn_mat.shape[0])
     @app.callback(
         Output("split-right-fig", "figure"),
 
@@ -115,6 +116,11 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
 
         The signature must match the decorated Inputs exactly.
         """
+        if global_state.brain_data is None or global_state.viz is None:
+            return go.Figure()  # empty placeholder
+
+        n_frames = global_state.brain_data.conn_mat.shape[0]
+
         conn_idx = int(np.clip(conn_idx or 0, 0, n_frames - 1))
         viz_type = helpers.str_to_viz_type(viz_fig_type)
 
@@ -184,6 +190,8 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         Input("split-right-fig", "figure"),
     )
     def update_stats(_):
+        if global_state.viz is None or global_state.brain_data is None:
+            return 0,0,0
         mask = global_state.viz._mask_cache
         # I need to fix the diagonals
         # print(mask)
@@ -235,7 +243,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
 
     label_id = "data-dataset-label"
     store_id = "data-store"
-    step_label_id = "data-step-indicator"
+    # step_label_id = "data-step-indicator"
     slider_id = "data-conn_idx-slider"
     error_id = "data-error-message"
     fc_summary_id = "data-fc-summary"
@@ -255,7 +263,8 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
     # Small helpers
     # ---------------------------------------------------
     def current_label(sd: dict) -> str:
-        return (sd.get("fc") or {}).get("name", "No dataset loaded")
+        print(sd)
+        return (sd.get("fc_meta") or {}).get("name", "No dataset loaded")
 
     def fc_summary_text(sd):
         fc = sd.get("fc_cfg")
@@ -288,7 +297,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
             Output(modal_id, "is_open"),
             Output(label_id, "children"),
             Output(store_id, "data"),
-            Output(step_label_id, "children"),
+            # Output(step_label_id, "children"),
             Output(slider_id, "max"),
             Output(slider_id, "marks"),
             Output(slider_id, "value"),
@@ -357,16 +366,16 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
         if not isinstance(store_data, dict):
             store_data = {}
         store_data.setdefault("step", 1)
-        store_data.setdefault("fc_cfg", None)
-        store_data.setdefault("loc_cfg", None)
-        store_data.setdefault("fc_meta", None)
-        store_data.setdefault("loc_meta", None)
-        store_data.setdefault("directed", False)
+        store_data.setdefault("fc_cfg", {})
+        store_data.setdefault("loc_cfg",{})
+        store_data.setdefault("fc_meta", {})
+        store_data.setdefault("loc_meta", {})
 
         error_msg = ""
 
         ctx = callback_context
         trig = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
+        print(f"Triggered by: {trig}")
 
         fc_src = fc_radio_val or "upload"
         loc_src = loc_radio_val or "upload"
@@ -376,6 +385,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
         # ---------------------------------------------------
         if trig == btn_id:
             is_open = not is_open
+            store_data = {"step": 1, "fc_cfg": {}, "loc_cfg": {}, "fc_meta": {}, "loc_meta": {}}
             step = store_data["step"]
 
             styles = (
@@ -384,12 +394,12 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
             )
             next_text = "Submit" if step == 2 else "Next"
             back_style = {"display": "block"} if step == 2 else {"display": "none"}
-
+            print("Opening modal")
             return (
                 is_open,
                 current_label(store_data),
                 store_data,
-                overall_step_text(store_data),
+                # overall_step_text(store_data),
                 slider_max,
                 slider_marks,
                 slider_val,
@@ -407,6 +417,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
         # Step navigation
         # ---------------------------------------------------
         if trig == back_id and store_data["step"] == 2:
+            print("Going back to step 1")
             store_data["step"] = 1
 
         # ---------------------------------------------------
@@ -418,6 +429,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
             # STEP 1 → Save FC config
             # -------------------------
             if store_data["step"] == 1:
+                print("Processing FC step")
                 fc_cfg = loader.make_fc_cfg(
                     source=fc_src,
                     upload=(fc_contents, fc_filename),
@@ -438,6 +450,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
             # STEP 2 → Save LOC config & BUILD DATASET
             # -------------------------
             elif store_data["step"] == 2:
+                print("Processing LOC step")
                 if store_data["fc_cfg"]["type"] == "sim":
                     print(store_data["fc_cfg"])
                     n_elec = store_data["fc_cfg"]["n_elec"]
@@ -464,8 +477,9 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
 
                     # Save into global_state
                     global_state.brain_data = bd
+                    global_state.threshold = Threshold()
                     ## FIX
-                    global_state.viz.update_data(bd)
+                    global_state.viz = VizUIManager(bd, global_state.threshold)
 
                     # Update store with metadata
                     store_data["fc_meta"] = meta["fc"].__dict__
@@ -493,7 +507,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
             is_open,
             current_label(store_data),
             store_data,
-            overall_step_text(store_data),
+            # overall_step_text(store_data),
             slider_max,
             slider_marks,
             slider_val,

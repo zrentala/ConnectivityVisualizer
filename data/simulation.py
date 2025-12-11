@@ -43,9 +43,9 @@ def generate_locs(n_elec: int, elec_names=None):
     theta = np.arccos(costheta)
     r = np.random.uniform(0, 1, n_elec) ** (1/3)
 
-    x = r * np.sin(theta) * np.cos(phi)
-    y = r * np.sin(theta) * np.sin(phi)
-    z = r * np.cos(theta)
+    x = r * np.sin(theta) * np.cos(phi) / 10
+    y = r * np.sin(theta) * np.sin(phi) / 10
+    z = r * np.cos(theta) / 10
 
     # Make names if needed
     if elec_names is None:
@@ -53,7 +53,6 @@ def generate_locs(n_elec: int, elec_names=None):
     else:
         if len(elec_names) != n_elec:
             raise ValueError("Length of elec_names must match n_elec")
-
     # Return dict like montage.get_positions()["ch_pos"]
     return {name: np.array([xi, yi, zi]) 
             for name, xi, yi, zi in zip(elec_names, x, y, z)}
