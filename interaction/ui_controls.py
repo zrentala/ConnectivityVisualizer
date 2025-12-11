@@ -517,10 +517,7 @@ def create_data_component() -> html.Div:
                         html.H6("Preset locations"),
                         create_dropdown(
                             id="data-loc-preset-dropdown",
-                            options=[
-                                {"label": "10-channel 10-20 layout", "value": "standard_10_20"},
-                                {"label": "64-channel layout", "value": "standard_64"},
-                            ],
+                            options=[],
                         ),
                     ],
                     className="p-3 mb-2 border rounded bg-light",

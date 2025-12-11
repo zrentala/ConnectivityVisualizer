@@ -2,7 +2,7 @@ from dash import Input, Output, State, Dash, no_update, callback_context
 import numpy as np
 import plotly.graph_objects as go
 import plotly.colors as plc
-from data.loaders import DataLoader, PRESET_CONFIGS  # adjust import path if needed
+from data.loaders import DataLoader, PRESET_CONFIGS, PRESET_LOCS, PRESET_LOCS_REVERSED  # adjust import path if needed
 import visualization.vizhelpers as helpers
 from dash.exceptions import PreventUpdate
 
@@ -220,6 +220,39 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             visible_edges,
         )
 
+def update_loc_options(sd):
+    print("Updating loc options with sd:", sd)
+    # No FC loaded yet → no options
+    if sd is None or "n_elec" not in sd:
+        return [{"label": "No available presets", "value": "none", "disabled": True}]
+
+    n = sd["n_elec"]
+    presets = PRESET_LOCS_REVERSED.get(n)
+
+    # If nothing matches → disabled placeholder
+    if not presets:
+        return [{"label": "No available presets", "value": "none", "disabled": True}]
+
+    # Normal case → real selectable options
+    return [{"label": name, "value": name} for name in presets]
+
+def update_fc_options():
+    presets = PRESET_CONFIGS
+
+    # Nothing matches → disabled placeholder
+    if not presets:
+        return [{"label": "No available presets", "value": "none", "disabled": True}]
+
+    # Normal case → real options
+    return [
+        {
+            "label": key,
+            "value": f"{key} (n={value['n_elec']}, mats={value['n_mat']})"
+        }
+        for key, value in presets.items()
+    ]
+
+
 def register_data_callbacks(app: Dash, global_state: GlobalAppState):
     loader = DataLoader()
 
@@ -315,6 +348,8 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
             Output(loc_upload_card_id, "className"),
             Output(loc_preset_card_id, "className"),
             Output(loc_sim_card_id, "className"),
+            Output(fc_preset_id, "options"),
+            Output(loc_preset_id, "options"),
         ),
         (
             Input(btn_id, "n_clicks"),
@@ -380,6 +415,9 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
         fc_src = fc_radio_val or "upload"
         loc_src = loc_radio_val or "upload"
 
+        loc_options = update_loc_options(store_data)
+        fc_options = update_fc_options()
+
         # ---------------------------------------------------
         # Open modal
         # ---------------------------------------------------
@@ -410,6 +448,8 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
                 next_text,      # ← MISSING (Output 12)
                 back_style,     # ← MISSING (Output 13)
                 *card_classes(fc_src, loc_src),
+                fc_options,
+                loc_options,
             )
 
 
@@ -442,7 +482,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
 
                 store_data["fc_cfg"] = fc_cfg
                 store_data["directed"] = bool(directed_val)
-
+                
                 store_data["step"] = 2
                 # print(store_data)
 
@@ -518,213 +558,12 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
             next_text,      # ← MISSING (Output 12)
             back_style,     # ← MISSING (Output 13)
             *card_classes(fc_src, loc_src),
+            fc_options,
+            loc_options,
         )
+    
+   
 
-
-
-
-# def register_data_callbacks(app: Dash, global_state: GlobalAppState):
-#     modal_id = "data-modal"
-#     btn_id = "data-add_dataset-button"
-#     close_id = "data-modal-close-button"
-
-#     # Step 1 – FC data
-#     fc_upload_id = "data-fc-upload"
-#     fc_preset_id = "data-fc-preset-dropdown"
-#     fc_gen_btn_id = "data-fc-gen-btn"
-
-#     # Step 2 – location data
-#     loc_upload_id = "data-loc-upload"
-#     loc_preset_id = "data-loc-preset-dropdown"
-#     loc_gen_btn_id = "data-loc-gen-btn"
-
-#     # Step 3 – directed flag
-#     directed_id = "data-directed-checkbox"
-
-#     label_id = "data-dataset-label"
-#     store_id = "data-store"
-#     step_label_id = "data-step-indicator"
-#     slider_id = "data-conn_idx-slider"
-
-#     loader = DataLoader()
-
-#     def step_text(step: int) -> str:
-#         return (
-#             "Step 1: Load FC data" if step == 1 else
-#             "Step 2: Load location data" if step == 2 else
-#             "Step 3: Directed / undirected" if step == 3 else
-#             "Completed"
-#         )
-
-#     @app.callback(
-#         Output(modal_id, "is_open"),
-#         Output(label_id, "children"),
-#         Output(store_id, "data"),
-#         Output(step_label_id, "children"),
-#         Output(slider_id, "max"),
-#         Output(slider_id, "marks"),
-#         Output(slider_id, "value"),
-#         Input(btn_id, "n_clicks"),
-#         Input(close_id, "n_clicks"),
-#         Input(fc_upload_id, "contents"),
-#         Input(fc_preset_id, "value"),
-#         Input(fc_gen_btn_id, "n_clicks"),
-#         Input(loc_upload_id, "contents"),
-#         Input(loc_preset_id, "value"),
-#         Input(loc_gen_btn_id, "n_clicks"),
-#         Input(directed_id, "value"),
-#         State(fc_upload_id, "filename"),
-#         State(loc_upload_id, "filename"),
-#         State(modal_id, "is_open"),
-#         State(store_id, "data"),
-#         State(slider_id, "max"),
-#         State(slider_id, "marks"),
-#         State(slider_id, "value"),
-#         prevent_initial_call=False,
-#     )
-#     def handle_data_modal(*args):
-#         (
-#             btn_click, close_click,
-#             fc_contents, fc_preset, fc_gen_click,
-#             loc_contents, loc_preset, loc_gen_click,
-#             directed_val,
-#             fc_filename, loc_filename,
-#             is_open, store_data,
-#             slider_max, slider_marks, slider_value
-#         ) = args
-
-#         # --- Normalize stored modal state ---
-#         if not isinstance(store_data, dict):
-#             store_data = {}
-#         # store_data = store_data or {}
-#         store_data.setdefault("fc", {})
-#         store_data.setdefault("loc", {})
-#         # store_data.setdefault("brain", {})
-#         store_data.setdefault("directed", False)
-#         store_data.setdefault("step", 1)
-#         print(store_data)
-
-#         ctx = callback_context
-#         trigger = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
-
-        
-
-#         # ------------------------------------------------------------
-#         # A. Modal open / close
-#         # ------------------------------------------------------------
-#         if trigger in (btn_id, close_id):
-#             return (
-#                 not (is_open or False),
-#                 store_data.get("fc", {}).get("name", "No dataset loaded"),
-#                 store_data,
-#                 step_text(store_data["step"]),
-#                 slider_max, slider_marks, slider_value
-#             )
-
-#         # ------------------------------------------------------------
-#         # B. STEP 1: Load FC data
-#         # ------------------------------------------------------------
-#         if store_data["step"] == 1 and trigger in (fc_upload_id, fc_preset_id, fc_gen_btn_id):
-#             try:
-#                 # Uploaded FC file
-#                 if trigger == fc_upload_id and fc_contents:
-#                     meta, slider = loader.load_uploaded(fc_contents, fc_filename, store_data)
-
-#                 # Preset FC
-#                 elif trigger == fc_preset_id and fc_preset:
-#                     meta, slider = loader.load_preset(fc_preset)
-
-#                 # Generate FC data
-#                 elif trigger == fc_gen_btn_id:
-#                     meta, slider = loader.load_simulated_custom(n_elec=20, n_mat=10, directed=False)
-
-#                 else:
-#                     raise PreventUpdate
-
-#                 store_data["fc"] = {"name": meta.name, "source": meta.source, **meta.extra}
-#                 store_data["step"] = 2
-
-#                 return (
-#                     is_open,
-#                     meta.name,
-#                     store_data,
-#                     step_text(2),
-#                     slider.max_idx, slider.marks, slider.value
-#                 )
-
-#             except Exception as exc:
-#                 return (
-#                     is_open,
-#                     f"FC load failed: {exc}",
-#                     store_data,
-#                     step_text(1),
-#                     slider_max, slider_marks, slider_value
-#                 )
-
-#         # ------------------------------------------------------------
-#         # C. STEP 2: Load location data
-#         # ------------------------------------------------------------
-#         if store_data["step"] == 2 and trigger in (loc_upload_id, loc_preset_id, loc_gen_btn_id):
-#             try:
-#                 # Location uploaded
-#                 if trigger == loc_upload_id and loc_contents:
-#                     meta, _ = loader.load_location(loc_contents, loc_filename)
-
-#                 # Preset location
-#                 elif trigger == loc_preset_id and loc_preset:
-#                     meta, _ = loader.load_location_preset(loc_preset)
-
-#                 # Generated location
-#                 elif trigger == loc_gen_btn_id:
-#                     meta, _ = loader.load_location_simulated()
-
-#                 else:
-#                     raise PreventUpdate
-
-#                 store_data["loc"] = {"name": meta.name, "source": meta.source, **meta.extra}
-#                 store_data["step"] = 3
-
-#                 return (
-#                     is_open,
-#                     store_data["fc"]["name"],
-#                     store_data,
-#                     step_text(3),
-#                     slider_max, slider_marks, slider_value
-#                 )
-
-#             except Exception as exc:
-#                 return (
-#                     is_open,
-#                     f"Location load failed: {exc}",
-#                     store_data,
-#                     step_text(2),
-#                     slider_max, slider_marks, slider_value
-#                 )
-
-#         # ------------------------------------------------------------
-#         # D. STEP 3: Directed / Undirected
-#         # ------------------------------------------------------------
-#         if store_data["step"] == 3 and trigger == directed_id:
-#             store_data["directed"] = bool(directed_val)
-
-#             return (
-#                 is_open,
-#                 store_data["fc"]["name"],
-#                 store_data,
-#                 step_text(4),
-#                 slider_max, slider_marks, slider_value
-#             )
-
-#         # ------------------------------------------------------------
-#         # Fallback
-#         # ------------------------------------------------------------
-#         return (
-#             is_open,
-#             store_data.get("fc", {}).get("name", "No dataset loaded"),
-#             store_data,
-#             step_text(store_data["step"]),
-#             slider_max, slider_marks, slider_value
-#         )
 
 
 

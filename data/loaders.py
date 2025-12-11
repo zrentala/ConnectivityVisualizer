@@ -20,12 +20,12 @@ import mne
 
 # You can move / edit these presets here instead of in callbacks.py
 PRESET_CONFIGS: Dict[str, Dict[str, Any]] = {
-    "small_undirected": {"n_elec": 10, "directed": False, "n_mat": 5},
-    "medium_directed": {"n_elec": 20, "directed": True, "n_mat": 10},
+    "small_undirected": {"n_elec": 16, "directed": False, "n_mat": 5},
+    "medium_directed": {"n_elec": 8, "directed": True, "n_mat": 10},
     "large_undirected": {"n_elec": 64, "directed": False, "n_mat": 20},
 }
 
-ESET_LOCS: Dict[str, int] = {
+PRESET_LOCS: Dict[str, int] = {
     "standard_1005": 343,           # 10-05 system ~343 electrodes (EEG positions) :contentReference[oaicite:1]{index=1}
     "standard_1020": 94,            # 10-20 system ~94 electrodes :contentReference[oaicite:2]{index=2}
     "standard_alphabetic": 65,      # alphabetic labeling ~65 electrodes :contentReference[oaicite:3]{index=3}
@@ -59,6 +59,29 @@ ESET_LOCS: Dict[str, int] = {
 
     "artinis-octamon": 8            # Artinis OctaMon ~8 sources (not classic EEG) :contentReference[oaicite:26]{index=26}
 }
+
+PRESET_LOCS_REVERSED = {
+    343: ["standard_1005"],
+    94: ["standard_1020"],
+    65: ["standard_alphabetic"],
+    100: ["standard_postfixed", "standard_primed"],
+    74: ["standard_prefixed", "easycap-M1"],
+    16: ["biosemi16"],
+    32: ["biosemi32"],
+    64: ["biosemi64", "easycap-M43"],
+    128: ["biosemi128", "GSN-HydroCel-128"],
+    160: ["biosemi160"],
+    256: ["biosemi256", "EGI_256", "GSN-HydroCel-256"],
+    61: ["easycap-M10"],
+    33: ["GSN-HydroCel-32"],
+    65: ["GSN-HydroCel-65_1.0"],  # note: duplicates merged
+    129: ["GSN-HydroCel-129"],
+    257: ["GSN-HydroCel-257"],
+    60: ["mgh60"],
+    70: ["mgh70"],
+    8: ["artinis-octamon"],
+}
+
 
 @dataclass
 class Meta:
