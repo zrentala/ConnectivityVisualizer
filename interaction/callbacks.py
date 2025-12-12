@@ -348,8 +348,8 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
             Output(loc_upload_card_id, "className"),
             Output(loc_preset_card_id, "className"),
             Output(loc_sim_card_id, "className"),
-            Output(fc_preset_id, "options"),
-            Output(loc_preset_id, "options"),
+            # Output(fc_preset_id, "options"),
+            # Output(loc_preset_id, "options"),
         ),
         (
             Input(btn_id, "n_clicks"),
@@ -448,8 +448,8 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
                 next_text,      # ← MISSING (Output 12)
                 back_style,     # ← MISSING (Output 13)
                 *card_classes(fc_src, loc_src),
-                fc_options,
-                loc_options,
+                # fc_options,
+                # loc_options,
             )
 
 
@@ -469,7 +469,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
             # STEP 1 → Save FC config
             # -------------------------
             if store_data["step"] == 1:
-                print("Processing FC step")
+                print(fc_preset_val)
                 fc_cfg = loader.make_fc_cfg(
                     source=fc_src,
                     upload=(fc_contents, fc_filename),
@@ -491,11 +491,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
             # -------------------------
             elif store_data["step"] == 2:
                 print("Processing LOC step")
-                if store_data["fc_cfg"]["type"] == "sim":
-                    print(store_data["fc_cfg"])
-                    n_elec = store_data["fc_cfg"]["n_elec"]
-                else:
-                    n_elec = None
+                n_elec = store_data["fc_cfg"]["n_elec"]
 
                 loc_cfg = loader.make_loc_cfg(
                     source=loc_src,
@@ -548,8 +544,6 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
         next_text = "Submit" if step == 2 else "Next"
         back_style = {"display": "block"} if step == 2 else {"display": "none"}
 
-        loc_options = update_loc_options(store_data)
-        fc_options = update_fc_options()
         return (
             is_open,
             current_label(store_data),
@@ -565,8 +559,8 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
             next_text,      # ← MISSING (Output 12)
             back_style,     # ← MISSING (Output 13)
             *card_classes(fc_src, loc_src),
-            fc_options,
-            loc_options,
+            # fc_options,
+            # loc_options,
         )
     
    

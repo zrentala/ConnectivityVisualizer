@@ -150,27 +150,62 @@ class DataLoader:
         return bd, combined_meta, slider_meta
     
     def make_fc_cfg(self, source, upload=None, preset=None, simulate=None):
+        """
+        Standardizes FC config so ALL return:
+        {
+            "type": ...,
+            "n_elec": int,
+            "n_mat": int,
+            "directed": bool,
+            "contents"/"filename"/"name" depending on source
+        }
+        """
+
+        # ------------------------------
+        # Upload
+        # ------------------------------
         if source == "upload":
             contents, filename = upload
+            buf = decode_uploaded(contents, filename)
+            arr = load_connectivity(buf)
+
+            # ensure 3D
+            if arr.ndim == 2:
+                arr = arr[np.newaxis, ...]
+            n_mat, n_elec, _ = arr.shape
+
             return {
                 "type": "upload",
                 "contents": contents,
                 "filename": filename,
+                "n_elec": n_elec,
+                "n_mat": n_mat,
+                "directed": False,   # assume undirected unless user supplies otherwise
             }
 
+        # ------------------------------
+        # Preset
+        # ------------------------------
         if source == "preset":
+            cfg = self.preset_configs[preset]  # already validated outside
             return {
                 "type": "preset",
-                "name": preset
+                "name": preset,
+                "n_elec": cfg["n_elec"],
+                "n_mat": cfg["n_mat"],
+                "directed": cfg["directed"],
             }
 
+        # ------------------------------
+        # Simulated
+        # ------------------------------
         if source == "simulate":
             n_elec, n_mat = simulate
             return {
                 "type": "sim",
                 "n_elec": n_elec,
                 "n_mat": n_mat,
-                "directed": None,  # override in callback
+                "directed": None,   # the callback will fill this in
             }
 
         raise ValueError(f"Unknown FC source: {source}")

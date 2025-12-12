@@ -1,7 +1,50 @@
 from dash import html, dcc
 import dash_bootstrap_components as dbc
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Any, Dict
+
+
+PRESET_CONFIGS: Dict[str, Dict[str, Any]] = {
+    "small_undirected": {"n_elec": 16, "directed": False, "n_mat": 5},
+    "medium_directed": {"n_elec": 8, "directed": True, "n_mat": 10},
+    "large_undirected": {"n_elec": 64, "directed": False, "n_mat": 20},
+}
+
+PRESET_LOCS: Dict[str, int] = {
+    "standard_1005": 343,           # 10-05 system ~343 electrodes (EEG positions) :contentReference[oaicite:1]{index=1}
+    "standard_1020": 94,            # 10-20 system ~94 electrodes :contentReference[oaicite:2]{index=2}
+    "standard_alphabetic": 65,      # alphabetic labeling ~65 electrodes :contentReference[oaicite:3]{index=3}
+    "standard_postfixed": 100,      # postfix intermed. ~100 electrodes :contentReference[oaicite:4]{index=4}
+    "standard_prefixed": 74,        # prefix intermed. ~74 electrodes :contentReference[oaicite:5]{index=5}
+    "standard_primed": 100,         # primed ~100 electrodes :contentReference[oaicite:6]{index=6}
+
+    "biosemi16": 16,                # BioSemi 16 channels :contentReference[oaicite:7]{index=7}
+    "biosemi32": 32,                # BioSemi 32 channels :contentReference[oaicite:8]{index=8}
+    "biosemi64": 64,                # BioSemi 64 channels :contentReference[oaicite:9]{index=9}
+    "biosemi128": 128,              # BioSemi 128 channels :contentReference[oaicite:10]{index=10}
+    "biosemi160": 160,              # BioSemi 160 channels :contentReference[oaicite:11]{index=11}
+    "biosemi256": 256,              # BioSemi 256 channels :contentReference[oaicite:12]{index=12}
+
+    "easycap-M1": 74,               # EasyCap M1 ~74 electrodes :contentReference[oaicite:13]{index=13}
+    "easycap-M10": 61,              # EasyCap M10 ~61 electrodes :contentReference[oaicite:14]{index=14}
+    "easycap-M43": 64,              # EasyCap M43 ~64 electrodes (MNE listing) :contentReference[oaicite:15]{index=15}
+
+    "EGI_256": 256,                 # EGI Net 256 channels :contentReference[oaicite:16]{index=16}
+
+    "GSN-HydroCel-32": 33,          # HydroCel 32 + Cz (~33) :contentReference[oaicite:17]{index=17}
+    "GSN-HydroCel-64_1.0": 64,      # HydroCel 64 channels :contentReference[oaicite:18]{index=18}
+    "GSN-HydroCel-65_1.0": 65,      # HydroCel 64 + Cz (~65) :contentReference[oaicite:19]{index=19}
+    "GSN-HydroCel-128": 128,        # HydroCel 128 channels :contentReference[oaicite:20]{index=20}
+    "GSN-HydroCel-129": 129,        # HydroCel 128 + Cz (~129) :contentReference[oaicite:21]{index=21}
+    "GSN-HydroCel-256": 256,        # HydroCel 256 channels :contentReference[oaicite:22]{index=22}
+    "GSN-HydroCel-257": 257,        # HydroCel 256 + Cz (~257) :contentReference[oaicite:23]{index=23}
+
+    "mgh60": 60,                    # MGH 60 channels :contentReference[oaicite:24]{index=24}
+    "mgh70": 70,                    # MGH 70 channels :contentReference[oaicite:25]{index=25}
+
+    "artinis-octamon": 8            # Artinis OctaMon ~8 sources (not classic EEG) :contentReference[oaicite:26]{index=26}
+}
+
 
 container_class = "p-3 my-3 rounded shadow-sm border border-dark"
 
@@ -384,6 +427,25 @@ def create_viz_controls() -> html.Div:
 #         ],
 #         fluid=True, className=container_class
 #     )
+
+def get_loc_options():
+    presets = PRESET_LOCS.keys()
+    # Normal case → real selectable options
+    return [{"label": name, "value": name} for name in presets]
+
+def get_fc_options():
+    presets = PRESET_CONFIGS
+
+    return [
+        {
+            "label": f"{key.replace('_', ' ').title()} "
+                     f"(n={cfg['n_elec']}, mats={cfg['n_mat']})",
+            "value": key
+        }
+        for key, cfg in presets.items()
+    ]
+
+
 def create_data_component() -> html.Div:
     """Two-step data selection UI (Step 1: FC, Step 2: locations) with radios wrapping each section."""
 
@@ -436,11 +498,7 @@ def create_data_component() -> html.Div:
                         html.H6("Preset FC dataset"),
                         create_dropdown(
                             id="data-fc-preset-dropdown",
-                            options=[
-                                {"label": "small_undirected", "value": "Small undirected (n=10, mats=5)"},
-                                {"label": "Medium directed (n=20, mats=10)", "value": "medium_directed"},
-                                {"label": "Large undirected (n=64, mats=20)", "value": "large_undirected"},
-                            ],
+                            options=get_fc_options(),
                             clearable=True,
                         ),
                     ],
@@ -517,7 +575,7 @@ def create_data_component() -> html.Div:
                         html.H6("Preset locations"),
                         create_dropdown(
                             id="data-loc-preset-dropdown",
-                            options=[],
+                            options=get_loc_options(),
                         ),
                     ],
                     className="p-3 mb-2 border rounded bg-light",
