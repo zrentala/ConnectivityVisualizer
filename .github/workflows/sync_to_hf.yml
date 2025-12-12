@@ -1,57 +1,97 @@
-# name: Sync to Hugging Face hu
-
-# on:
-#   push:
-#     branches: [main]
-
-#   workflow_dispatch:
-
-# jobs:
-#   sync-to-hub:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: action/checkout@v2
-#         with:
-#           fetch-depth: 0
-#       - name: Push to hub
-#         env:
-#           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-#         run: git push --force https://zrentala:$HF_TOKEN@huggingface.co/spaces/zrentala/ConnectivityVisualizer main
-name: Sync to Hugging Face
+name: Deploy Dash App to Hugging Face Space
 
 on:
   push:
     branches:
-      - main  # or your default branch
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # -------------------------------
+      # 1️⃣ Checkout full repository
+      # -------------------------------
       - name: Checkout repository
-        uses: actions/checkout@v3   # ✅ correct spelling
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # required to push to HF Space
 
+      # -------------------------------
+      # 2️⃣ Set up Python
+      # -------------------------------
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.11  # or your desired Python version
+          python-version: 3.11  # or your app's version
 
+      # -------------------------------
+      # 3️⃣ Install dependencies
+      # -------------------------------
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Push to Hugging Face Space
+      # -------------------------------
+      # 4️⃣ Push to Hugging Face Space
+      # -------------------------------
+      - name: Deploy to Hugging Face Space
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}  # Your Hugging Face token
-          HF_USERNAME: zrentala
+          HF_USERNAME: zrentala                # your HF username
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}   # HF token with write access
         run: |
+          # Configure git
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
+
+          # Add HF remote with username:token for authentication
           git remote add hf https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/zrentala/ConnectivityVisualizer.git
+
+          # Fetch HF remote and switch to main branch
           git fetch hf
           git checkout main || git checkout -b main
+
+          # Add changes, commit, and force push
           git add .
           git commit -m "Update from GitHub Actions" || echo "No changes to commit"
           git push hf main --force
+# name: Sync to Hugging Face
+
+# on:
+#   push:
+#     branches:
+#       - main  # or your default branch
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v3   # ✅ correct spelling
+
+#       - name: Set up Python
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: 3.11  # or your desired Python version
+
+#       - name: Install dependencies
+#         run: |
+#           python -m pip install --upgrade pip
+#           pip install -r requirements.txt
+
+#       - name: Push to Hugging Face Space
+#         env:
+#           HF_TOKEN: ${{ secrets.HF_TOKEN }}  # Your Hugging Face token
+#           HF_USERNAME: zrentala
+#         run: |
+#           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+#           git config --global user.name "github-actions[bot]"
+#           git remote add hf https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/zrentala/ConnectivityVisualizer.git
+#           git fetch hf
+#           git checkout main || git checkout -b main
+#           git add .
+#           git commit -m "Update from GitHub Actions" || echo "No changes to commit"
+#           git push hf main --force
