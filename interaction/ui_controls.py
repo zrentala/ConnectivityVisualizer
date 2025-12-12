@@ -437,7 +437,7 @@ def create_data_component() -> html.Div:
                         create_dropdown(
                             id="data-fc-preset-dropdown",
                             options=[
-                                {"label": "Small undirected (n=10, mats=5)", "value": "small_undirected"},
+                                {"label": "small_undirected", "value": "Small undirected (n=10, mats=5)"},
                                 {"label": "Medium directed (n=20, mats=10)", "value": "medium_directed"},
                                 {"label": "Large undirected (n=64, mats=20)", "value": "large_undirected"},
                             ],

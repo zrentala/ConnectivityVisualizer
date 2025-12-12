@@ -526,7 +526,12 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
                     store_data["loc_meta"] = meta["loc"].__dict__
 
                     slider_max = slider.max_idx
-                    slider_marks = slider.marks
+                    slider_marks = (
+                        {k: slider.marks[k] for k in 
+                            (lambda ks: ks[0:len(ks):max(1, len(ks)//9)][:10])(list(slider.marks.keys()))
+                        }
+                        if len(slider.marks) > 10 else slider.marks
+                    )
                     slider_val = slider.value
 
                     is_open = False
@@ -543,6 +548,8 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
         next_text = "Submit" if step == 2 else "Next"
         back_style = {"display": "block"} if step == 2 else {"display": "none"}
 
+        loc_options = update_loc_options(store_data)
+        fc_options = update_fc_options()
         return (
             is_open,
             current_label(store_data),

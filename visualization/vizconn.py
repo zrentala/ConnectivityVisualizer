@@ -161,7 +161,7 @@ class ConnectivityViewHeatmap(ConnectivityView):
         labels,
         directed: bool,
         color_scale_info,
-        title: Optional[str]
+        title=None,
     ):
         fig = go.Figure()
 
@@ -209,7 +209,7 @@ class ConnectivityViewHeatmap(ConnectivityView):
             plot_bgcolor="white",
         )
 
-        helpers._update_title(fig=fig, title=title)
+        # helpers._update_title(fig=fig, title=title)
         self.fig = fig
         return fig
 
@@ -222,7 +222,7 @@ class ConnectivityViewHeatmap(ConnectivityView):
         color_scale_info,
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
-        title: Optional[str]
+        title=None,
     ) -> go.Figure:
         fig = self.fig
         
@@ -245,79 +245,8 @@ class ConnectivityViewHeatmap(ConnectivityView):
             selector=dict(name="main"),
         )
 
-        helpers._update_title(fig=fig, title=title)
+        # helpers._update_title(fig=fig, title=title)
         self.fig = fig
-        return self.fig
-    
-    def update_attributes(self, viz_updates):
-        return
-
-class ConnectivityViewStats(ConnectivityView):
-    def __init__(
-        self,
-        default_pos_color: str = "red",
-        default_neg_color: str = "blue",
-    ):
-        super().__init__(
-            default_pos_color=default_pos_color,
-            default_neg_color=default_neg_color,
-        )
-
-    # Number of Nodes
-    # Number of Edges total and visible
-    # average connectivity total and visible
-    # Median
-    # sum
-    # IQR
-    # outliers
-    # connectivity range
-    # locations of electrodes
-    # directed or undirected
-    # Title
-    # Threshold: alpha, beta
-    # Graph:
-    # connection density
-    # node connection strengths
-    # global and local efficiency
-    # In degree out degree
-    # modularity
-
-
-    def build_figure(
-        self,
-        C: np.ndarray,
-        labels,
-        directed: bool,
-        color_scale_info,
-        title: Optional[str]
-    ):
-        fig = go.Figure()
-
-        # Color range: compute full-data min/max then map color_min/color_max (0..1) into that range
-        scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
-
-       
-
-        helpers._update_title(fig=fig, title=title)
-        self.fig = fig
-        return fig
-
-    def update_figure(
-        self,
-        C: np.ndarray,
-        labels, 
-        directed: bool,
-        update_type:UpdateType,
-        color_scale_info,
-        new_thresh_mask: Optional[np.ndarray],
-        old_thresh_mask: Optional[np.ndarray],
-        title: Optional[str]
-    ) -> go.Figure:
-        fig = self.fig
-        scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
-
-        helpers._update_title(fig=fig, title=title)
-
         return self.fig
     
     def update_attributes(self, viz_updates):
@@ -522,7 +451,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         labels,
         directed: bool,
         color_scale_info,
-        title: Optional[str]
+        title=None,
     ) -> go.Figure:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
@@ -566,7 +495,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                 plot_bgcolor="white",
                 
             )
-            helpers._update_title(fig=fig, title=title)
+            # helpers._update_title(fig=fig, title=title)
         self.fig = fig
         # print("FINISH")
         return fig
@@ -579,7 +508,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         color_scale_info,
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
-        title: Optional[str]
+        title=None,
     ) -> go.Figure:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         fig = self.fig
@@ -659,7 +588,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             # UPDATE COLOR BAR (MAKE THIS FUNCTION)
             helpers._update_colorbar(fig, self._colorbar_trace_idx, colorscale, zmin, zmax)
 
-        helpers._update_title(fig=fig, title=title)
+        # helpers._update_title(fig=fig, title=title)
         self.fig = fig
         return fig
 
@@ -1004,8 +933,8 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         labels,
         directed: bool,
         color_scale_info,
-        title: Optional[str],
-        brain_mesh: Optional[pv.PolyData]
+        brain_mesh: Optional[pv.PolyData],
+        title=None,
     ) -> go.Figure:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
@@ -1047,10 +976,10 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         directed: bool,
         update_type:UpdateType,
         color_scale_info,
-        title: Optional[str],
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
         brain_mesh: Optional[pv.PolyData],
+        title=None,
     ) -> go.Figure:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         
