@@ -46,9 +46,9 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}  # Your Hugging Face token
         run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          git remote add hf https://huggingface.co/spaces/<username>/<space-name>.git
+          # git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # git config --global user.name "github-actions[bot]"
+          git remote add hf https://huggingface.co/spaces/zrentala/ConnectivityVisualizer.git
           git fetch hf
           git checkout -b main || git checkout main
           git add .
