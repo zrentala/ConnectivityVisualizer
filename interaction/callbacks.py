@@ -252,320 +252,409 @@ def update_fc_options():
         for key, value in presets.items()
     ]
 
-
 def register_data_callbacks(app: Dash, global_state: GlobalAppState):
+    print("=== REGISTERING DATA CALLBACKS ===")
     loader = DataLoader()
 
-    modal_id = "data-modal"
-    btn_id = "data-add_dataset-button"
-    next_id = "data-next-button"
-    back_id = "data-back-button"
+    # IDs
+    label_id = "data-dataset-label"
+    store_id = "data-store"
+    slider_id = "data-conn_idx-slider"
 
+    # FC mode-related IDs
+    fc_mode_selector_id = "data-fc-mode-selector"
+    fc_mode_store_id = "data-fc-mode-store"
+    fc_upload_settings_id = "data-fc-upload-settings"
+    fc_preset_settings_id = "data-fc-preset-settings"
+    fc_simulate_settings_id = "data-fc-simulate-settings"
+
+    # Location mode-related IDs
+    loc_mode_selector_id = "data-loc-mode-selector"
+    loc_mode_store_id = "data-loc-mode-store"
+    loc_upload_settings_id = "data-loc-upload-settings"
+    loc_preset_settings_id = "data-loc-preset-settings"
+    loc_simulate_settings_id = "data-loc-simulate-settings"
+
+    # Upload/Preset/Simulate IDs
     fc_upload_id = "data-fc-upload"
     fc_preset_id = "data-fc-preset-dropdown"
+    fc_sim_nelec_id = "data-fc-sim-nelec"
+    fc_sim_nmat_id = "data-fc-sim-nmat"
+    directed_id = "data-directed-checkbox"
+
     loc_upload_id = "data-loc-upload"
     loc_preset_id = "data-loc-preset-dropdown"
 
-    fc_radio_id = "data-fc-radio"
-    loc_radio_id = "data-loc-radio"
-
-    fc_sim_nelec_id = "data-fc-sim-nelec"
-    fc_sim_nmat_id = "data-fc-sim-nmat"
-
-    directed_id = "data-directed-checkbox"
-
-    label_id = "data-dataset-label"
-    store_id = "data-store"
-    # step_label_id = "data-step-indicator"
-    slider_id = "data-conn_idx-slider"
-    error_id = "data-error-message"
-    fc_summary_id = "data-fc-summary"
-
-    step1_view_id = "data-step1-view"
-    step2_view_id = "data-step2-view"
-
-    # Card highlight IDs
-    fc_upload_card_id = "data-fc-radio-upload-card"
-    fc_preset_card_id = "data-fc-radio-preset-card"
-    fc_sim_card_id = "data-fc-radio-sim-card"
-    loc_upload_card_id = "data-loc-radio-upload-card"
-    loc_preset_card_id = "data-loc-radio-preset-card"
-    loc_sim_card_id = "data-loc-radio-sim-card"
-
     # ---------------------------------------------------
-    # Small helpers
-    # ---------------------------------------------------
-    def current_label(sd: dict) -> str:
-        print(sd)
-        return (sd.get("fc_meta") or {}).get("name", "No dataset loaded")
-
-    def fc_summary_text(sd):
-        fc = sd.get("fc_cfg")
-        if not fc:
-            return "No FC data loaded yet."
-        d = "directed" if fc.get("directed") else "undirected"
-        return f"FC: # electrodes = {fc.get('n_elec')}, # FC matrices={fc.get('n_mat')}, {d}"
-
-    def overall_step_text(sd):
-        step = sd.get("step", 1)
-        return "Step 1: Load FC data" if step == 1 else "Step 2: Load location data"
-
-    def card_classes(fc_src, loc_src):
-        base = "p-3 mb-2 border rounded bg-light"
-        sel = base + " border-primary shadow-sm"
-        return (
-            sel if fc_src == "upload" else base,
-            sel if fc_src == "preset" else base,
-            sel if fc_src == "simulate" else base,
-            sel if loc_src == "upload" else base,
-            sel if loc_src == "preset" else base,
-            sel if loc_src == "simulate" else base,
-        )
-
-    # ---------------------------------------------------
-    # MAIN CALLBACK
+    # MODE SWITCHING CALLBACKS
     # ---------------------------------------------------
     @app.callback(
-        (
-            Output(modal_id, "is_open"),
-            Output(label_id, "children"),
-            Output(store_id, "data"),
-            # Output(step_label_id, "children"),
-            Output(slider_id, "max"),
-            Output(slider_id, "marks"),
-            Output(slider_id, "value"),
-            Output(error_id, "children"),
-            Output(fc_summary_id, "children"),
-            Output(step1_view_id, "style"),
-            Output(step2_view_id, "style"),
-            Output(next_id, "children"),
-            Output(back_id, "style"),
-            
-            # Card classes
-            Output(fc_upload_card_id, "className"),
-            Output(fc_preset_card_id, "className"),
-            Output(fc_sim_card_id, "className"),
-            Output(loc_upload_card_id, "className"),
-            Output(loc_preset_card_id, "className"),
-            Output(loc_sim_card_id, "className"),
-            # Output(fc_preset_id, "options"),
-            # Output(loc_preset_id, "options"),
-        ),
-        (
-            Input(btn_id, "n_clicks"),
-            Input(next_id, "n_clicks"),
-            Input(back_id, "n_clicks"),
-            Input(fc_upload_id, "contents"),
-            Input(fc_preset_id, "value"),
-            Input(loc_upload_id, "contents"),
-            Input(loc_preset_id, "value"),
-            Input(fc_radio_id, "value"),
-            Input(loc_radio_id, "value"),
-            Input(directed_id, "value"),
-        ),
-        State(fc_sim_nelec_id, "value"),
-        State(fc_sim_nmat_id, "value"),
-        State(fc_upload_id, "filename"),
-        State(loc_upload_id, "filename"),
-        State(modal_id, "is_open"),
-        State(store_id, "data"),
-        State(slider_id, "max"),
-        State(slider_id, "marks"),
-        State(slider_id, "value"),
+        Output(fc_mode_store_id, "data"),
+        Output(fc_upload_settings_id, "style"),
+        Output(fc_preset_settings_id, "style"),
+        Output(fc_simulate_settings_id, "style"),
+        Input(fc_mode_selector_id, "value"),
         prevent_initial_call=False,
     )
-    def handle_modal(
-        btn_click,
-        next_click,
-        back_click,
+    def switch_fc_mode(mode):
+        if mode is None:
+            mode = "upload"
+        
+        upload_style = {"display": "block"} if mode == "upload" else {"display": "none"}
+        preset_style = {"display": "block"} if mode == "preset" else {"display": "none"}
+        simulate_style = {"display": "block"} if mode == "simulate" else {"display": "none"}
+        
+        return mode, upload_style, preset_style, simulate_style
+
+    @app.callback(
+        Output(loc_mode_store_id, "data"),
+        Output(loc_upload_settings_id, "style"),
+        Output(loc_preset_settings_id, "style"),
+        Output(loc_simulate_settings_id, "style"),
+        Input(loc_mode_selector_id, "value"),
+        prevent_initial_call=False,
+    )
+    def switch_loc_mode(mode):
+        if mode is None:
+            mode = "upload"
+        
+        upload_style = {"display": "block"} if mode == "upload" else {"display": "none"}
+        preset_style = {"display": "block"} if mode == "preset" else {"display": "none"}
+        simulate_style = {"display": "block"} if mode == "simulate" else {"display": "none"}
+        
+        return mode, upload_style, preset_style, simulate_style
+
+    # ---------------------------------------------------
+    # COMBINED DATA LOADING AND SUBMISSION CALLBACK
+    # ---------------------------------------------------
+    @app.callback(
+        Output(label_id, "children"),
+        Output(store_id, "data"),
+        Output(slider_id, "max"),
+        Output(slider_id, "marks"),
+        Output(slider_id, "value"),
+        
+        Input("data-submit-button", "n_clicks"),
+        Input(fc_upload_id, "contents"),
+        Input(fc_preset_id, "value"),
+        Input(fc_sim_nelec_id, "value"),
+        Input(fc_sim_nmat_id, "value"),
+        Input(loc_upload_id, "contents"),
+        Input(loc_preset_id, "value"),
+        Input(fc_mode_store_id, "data"),
+        Input(loc_mode_store_id, "data"),
+        Input(directed_id, "value"),
+        
+        State(fc_upload_id, "filename"),
+        State(loc_upload_id, "filename"),
+        State(store_id, "data"),
+        prevent_initial_call=False,
+    )
+    def load_and_submit_data(
+        submit_clicks,
         fc_contents,
         fc_preset_val,
-        loc_contents,
-        loc_preset_val,
-        fc_radio_val,
-        loc_radio_val,
-        directed_val,
         fc_sim_nelec,
         fc_sim_nmat,
+        loc_contents,
+        loc_preset_val,
+        fc_mode_val,
+        loc_mode_val,
+        directed_val,
         fc_filename,
         loc_filename,
-        is_open,
         store_data,
-        slider_max,
-        slider_marks,
-        slider_val,
     ):
-        # -------------------------
-        # Normalize store
-        # -------------------------
+        """Combined callback: update configuration and load data when submitted."""
+        
         if not isinstance(store_data, dict):
             store_data = {}
-        store_data.setdefault("step", 1)
-        store_data.setdefault("fc_cfg", {})
-        store_data.setdefault("loc_cfg",{})
-        store_data.setdefault("fc_meta", {})
-        store_data.setdefault("loc_meta", {})
-
-        error_msg = ""
-
+        
         ctx = callback_context
-        trig = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
-        print(f"Triggered by: {trig}")
-
-        fc_src = fc_radio_val or "upload"
-        loc_src = loc_radio_val or "upload"
-
-        loc_options = update_loc_options(store_data)
-        fc_options = update_fc_options()
-
-        # ---------------------------------------------------
-        # Open modal
-        # ---------------------------------------------------
-        if trig == btn_id:
-            is_open = not is_open
-            store_data = {"step": 1, "fc_cfg": {}, "loc_cfg": {}, "fc_meta": {}, "loc_meta": {}}
-            step = store_data["step"]
-
-            styles = (
-                {"display": "block"} if step == 1 else {"display": "none"}, # slide 1
-                {"display": "block"} if step == 2 else {"display": "none"}, # slide 2
+        if not ctx.triggered:
+            trigger_id = None
+        else:
+            trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        
+        fc_src = fc_mode_val or "upload"
+        loc_src = loc_mode_val or "upload"
+        
+        try:
+            # Always update configuration
+            fc_cfg = loader.make_fc_cfg(
+                source=fc_src,
+                upload=(fc_contents, fc_filename),
+                preset=fc_preset_val,
+                simulate=(fc_sim_nelec, fc_sim_nmat),
             )
-            next_text = "Submit" if step == 2 else "Next"
-            back_style = {"display": "block"} if step == 2 else {"display": "none"}
-            print("Opening modal")
-            return (
-                is_open,
-                current_label(store_data),
-                store_data,
-                # overall_step_text(store_data),
-                slider_max,
-                slider_marks,
-                slider_val,
-                error_msg,
-                fc_summary_text(store_data),
-                styles[0],
-                styles[1],
-                next_text,      # ← MISSING (Output 12)
-                back_style,     # ← MISSING (Output 13)
-                *card_classes(fc_src, loc_src),
-                # fc_options,
-                # loc_options,
+            
+            if fc_cfg["type"] == "sim":
+                fc_cfg["directed"] = bool(directed_val)
+            
+            store_data["fc_cfg"] = fc_cfg
+            store_data["directed"] = bool(directed_val)
+            
+            n_elec = fc_cfg.get("n_elec", 0)
+            loc_cfg = loader.make_loc_cfg(
+                source=loc_src,
+                upload=(loc_contents, loc_filename),
+                preset=loc_preset_val,
+                n_elec=n_elec,
             )
-
-
-        # ---------------------------------------------------
-        # Step navigation
-        # ---------------------------------------------------
-        if trig == back_id and store_data["step"] == 2:
-            print("Going back to step 1")
-            store_data["step"] = 1
-
-        # ---------------------------------------------------
-        # NEXT → Step logic
-        # ---------------------------------------------------
-        if trig == next_id:
-
-            # -------------------------
-            # STEP 1 → Save FC config
-            # -------------------------
-            if store_data["step"] == 1:
-                print(fc_preset_val)
-                fc_cfg = loader.make_fc_cfg(
-                    source=fc_src,
-                    upload=(fc_contents, fc_filename),
-                    preset=fc_preset_val,
-                    simulate=(fc_sim_nelec, fc_sim_nmat),
-                )
-                # print(fc_cfg)
-                if fc_cfg["type"] == "sim":
-                    fc_cfg["directed"] = bool(directed_val)
-
-                store_data["fc_cfg"] = fc_cfg
-                store_data["directed"] = bool(directed_val)
+            
+            store_data["loc_cfg"] = loc_cfg
+            
+            n_mats = fc_cfg.get("n_mat", 0)
+            slider_max = max(0, n_mats - 1)
+            marks = {0: "0", slider_max: str(slider_max)} if slider_max > 0 else {0: "0"}
+            slider_value = 0
+            
+            # Check if submit was clicked
+            if trigger_id == "data-submit-button" and submit_clicks and submit_clicks > 0:
+                if not fc_cfg or not loc_cfg:
+                    return "Please select both FC data and locations", store_data, slider_max, marks, slider_value
                 
-                store_data["step"] = 2
-                # print(store_data)
+                bd, meta, slider = loader.build_braindata(fc_cfg, loc_cfg, bool(directed_val))
+                
+                global_state.brain_data = bd
+                global_state.threshold = Threshold()
+                global_state.viz = VizUIManager(bd, global_state.threshold)
+                
+                store_data["fc_meta"] = meta["fc"].__dict__
+                store_data["loc_meta"] = meta["loc"].__dict__
+                
+                fc_name = fc_cfg.get("name", "Unknown FC")
+                loc_name = loc_cfg.get("name", "Unknown Locations")
+                label = f"✓ Loaded: {fc_name} | {loc_name}"
+                
+                return label, store_data, slider_max, marks, slider_value
+            
+            else:
+                fc_name = fc_cfg.get("name", "Unknown")
+                loc_name = loc_cfg.get("name", "Unknown")
+                label = f"Ready to load: {fc_name} | {loc_name}"
+                
+                return label, store_data, slider_max, marks, slider_value
+        
+        except Exception as e:
+            print(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return f"Error: {str(e)}", store_data, 0, {0: "0"}, 0
 
-            # -------------------------
-            # STEP 2 → Save LOC config & BUILD DATASET
-            # -------------------------
-            elif store_data["step"] == 2:
-                print("Processing LOC step")
-                n_elec = store_data["fc_cfg"]["n_elec"]
+# def register_data_callbacks(app: Dash, global_state: GlobalAppState):
+#     print("=== REGISTERING DATA CALLBACKS ===")
+#     loader = DataLoader()
 
-                loc_cfg = loader.make_loc_cfg(
-                    source=loc_src,
-                    upload=(loc_contents, loc_filename),
-                    preset=loc_preset_val,
-                    n_elec=n_elec,
-                )
+#     # IDs
+#     label_id = "data-dataset-label"
+#     store_id = "data-store"
+#     slider_id = "data-conn_idx-slider"
+#     error_id = "data-error-message"
 
-                # print(loc_cfg)
-                store_data["loc_cfg"] = loc_cfg
+#     # FC mode-related IDs
+#     fc_mode_selector_id = "data-fc-mode-selector"
+#     fc_mode_store_id = "data-fc-mode-store"
+#     fc_upload_settings_id = "data-fc-upload-settings"
+#     fc_preset_settings_id = "data-fc-preset-settings"
+#     fc_simulate_settings_id = "data-fc-simulate-settings"
 
-                try:
-                    # Build the final dataset
-                    bd, meta, slider = loader.build_braindata(
-                        store_data["fc_cfg"],
-                        store_data["loc_cfg"],
-                        store_data["directed"],
-                    )
+#     # Location mode-related IDs
+#     loc_mode_selector_id = "data-loc-mode-selector"
+#     loc_mode_store_id = "data-loc-mode-store"
+#     loc_upload_settings_id = "data-loc-upload-settings"
+#     loc_preset_settings_id = "data-loc-preset-settings"
+#     loc_simulate_settings_id = "data-loc-simulate-settings"
 
-                    # Save into global_state
-                    global_state.brain_data = bd
-                    global_state.threshold = Threshold()
-                    ## FIX
-                    global_state.viz = VizUIManager(bd, global_state.threshold)
+#     # Upload/Preset/Simulate IDs
+#     fc_upload_id = "data-fc-upload"
+#     fc_preset_id = "data-fc-preset-dropdown"
+#     fc_sim_nelec_id = "data-fc-sim-nelec"
+#     fc_sim_nmat_id = "data-fc-sim-nmat"
+#     directed_id = "data-directed-checkbox"
 
-                    # Update store with metadata
-                    store_data["fc_meta"] = meta["fc"].__dict__
-                    store_data["loc_meta"] = meta["loc"].__dict__
-
-                    slider_max = slider.max_idx
-                    slider_marks = (
-                        {k: slider.marks[k] for k in 
-                            (lambda ks: ks[0:len(ks):max(1, len(ks)//9)][:10])(list(slider.marks.keys()))
-                        }
-                        if len(slider.marks) > 10 else slider.marks
-                    )
-                    slider_val = slider.value
-
-                    is_open = False
-
-                except Exception as exc:
-                    error_msg = f"Data load failed: {exc}"
-
-        # ---------------------------------------------------
-        # Compute output UI state
-        # ---------------------------------------------------
-        step = store_data["step"]
-        step1_style = {"display": "block"} if step == 1 else {"display": "none"}
-        step2_style = {"display": "block"} if step == 2 else {"display": "none"}
-        next_text = "Submit" if step == 2 else "Next"
-        back_style = {"display": "block"} if step == 2 else {"display": "none"}
-
-        return (
-            is_open,
-            current_label(store_data),
-            store_data,
-            # overall_step_text(store_data),
-            slider_max,
-            slider_marks,
-            slider_val,
-            error_msg,
-            fc_summary_text(store_data),
-            step1_style,
-            step2_style,
-            next_text,      # ← MISSING (Output 12)
-            back_style,     # ← MISSING (Output 13)
-            *card_classes(fc_src, loc_src),
-            # fc_options,
-            # loc_options,
-        )
+#     loc_upload_id = "data-loc-upload"
+#     loc_preset_id = "data-loc-preset-dropdown"
     
-   
+#     print(f"FC Mode Selector ID: {fc_mode_selector_id}")
+#     print(f"FC Mode Store ID: {fc_mode_store_id}")
+#     print(f"FC Upload Settings ID: {fc_upload_settings_id}")
 
+#     # ---------------------------------------------------
+#     # ---------------------------------------------------
+#     # MODE SWITCHING CALLBACKS
+#     # ---------------------------------------------------
+#     # FC Mode switching
+#     @app.callback(
+#         Output(fc_mode_store_id, "data"),
+#         Output(fc_upload_settings_id, "style"),
+#         Output(fc_preset_settings_id, "style"),
+#         Output(fc_simulate_settings_id, "style"),
+#         Input(fc_mode_selector_id, "value"),
+#     )
+#     def switch_fc_mode(mode):
+#         """Switch between Upload, Preset, and Simulate modes for FC data."""
+#         print(f"=== FC Mode callback triggered ===")
+#         print(f"Mode value: {mode}")
+#         print(f"Mode type: {type(mode)}")
+        
+#         upload_style = {"display": "block"} if mode == "upload" else {"display": "none"}
+#         preset_style = {"display": "block"} if mode == "preset" else {"display": "none"}
+#         simulate_style ={"display": "block"} if mode == "simulate" else {"display": "none"}
+        
+#         print(f"Returning: store={mode}, upload_style={upload_style}, preset_style={preset_style}, simulate_style={simulate_style}")
+#         return mode, upload_style, preset_style, simulate_style
 
+#     # Location Mode switching
+#     @app.callback(
+#         Output(loc_mode_store_id, "data"),
+#         Output(loc_upload_settings_id, "style"),
+#         Output(loc_preset_settings_id, "style"),
+#         Output(loc_simulate_settings_id, "style"),
+#         Input(loc_mode_selector_id, "value"),
+#     )
+#     def switch_loc_mode(mode):
+#         """Switch between Upload, Preset, and Simulate modes for locations."""
+#         print(f"Location Mode switched to: {mode}")
+        
+#         upload_style = {} if mode == "upload" else {"display": "none"}
+#         preset_style = {} if mode == "preset" else {"display": "none"}
+#         simulate_style = {} if mode == "simulate" else {"display": "none"}
+        
+#         return mode, upload_style, preset_style, simulate_style
+#     # ---------------------------------------------------
+#     # DATA LOADING CALLBACK
+#     # ---------------------------------------------------
+#     @app.callback(
+#         Output(label_id, "children"),
+#         Output(store_id, "data"),
+#         Output(slider_id, "max"),
+#         Output(slider_id, "marks"),
+#         Output(slider_id, "value"),
+#         Input(fc_upload_id, "contents"),
+#         Input(fc_preset_id, "value"),
+#         Input(fc_sim_nelec_id, "value"),
+#         Input(fc_sim_nmat_id, "value"),
+#         Input(loc_upload_id, "contents"),
+#         Input(loc_preset_id, "value"),
+#         Input(fc_mode_store_id, "data"),
+#         Input(loc_mode_store_id, "data"),
+#         Input(directed_id, "value"),
+#         State(fc_upload_id, "filename"),
+#         State(loc_upload_id, "filename"),
+#         State(store_id, "data"),
+#         prevent_initial_call=False,
+#     )
+#     def load_data(
+#         fc_contents,
+#         fc_preset_val,
+#         fc_sim_nelec,
+#         fc_sim_nmat,
+#         loc_contents,
+#         loc_preset_val,
+#         fc_mode_val,
+#         loc_mode_val,
+#         directed_val,
+#         fc_filename,
+#         loc_filename,
+#         store_data,
+#     ):
+#         """Load FC and location data based on selections."""
+#         if not isinstance(store_data, dict):
+#             store_data = {}
+
+#         fc_src = fc_mode_val or "upload"
+#         loc_src = loc_mode_val or "upload"
+
+#         try:
+#             # Load FC data
+#             fc_cfg = loader.make_fc_cfg(
+#                 source=fc_src,
+#                 upload=(fc_contents, fc_filename),
+#                 preset=fc_preset_val,
+#                 simulate=(fc_sim_nelec, fc_sim_nmat),
+#             )
+            
+#             if fc_cfg["type"] == "sim":
+#                 fc_cfg["directed"] = bool(directed_val)
+            
+#             store_data["fc_cfg"] = fc_cfg
+#             store_data["directed"] = bool(directed_val)
+
+#             # Load location data
+#             n_elec = fc_cfg.get("n_elec", 0)
+#             loc_cfg = loader.make_loc_cfg(
+#                 source=loc_src,
+#                 upload=(loc_contents, loc_filename),
+#                 preset=loc_preset_val,
+#                 n_elec=n_elec,
+#             )
+            
+#             store_data["loc_cfg"] = loc_cfg
+
+#             # Create dataset label
+#             fc_name = fc_cfg.get("name", "Unknown")
+#             loc_name = loc_cfg.get("name", "Unknown")
+#             label = f"FC: {fc_name} | Locations: {loc_name}"
+            
+#             # Create slider marks
+#             n_mats = fc_cfg.get("n_mat", 0)
+#             slider_max = max(0, n_mats - 1)
+#             marks = {0: "0", slider_max: str(slider_max)} if slider_max > 0 else {0: "0"}
+#             slider_value = 0
+
+#             return label, store_data, slider_max, marks, slider_value
+
+#         except Exception as e:
+#             print(f"Error loading data: {e}")
+#             return "Error loading data", store_data, 0, {0: "0"}, 0
+
+#     # ---------------------------------------------------
+#     # SUBMIT BUTTON CALLBACK - Build and Load Data
+#     # ---------------------------------------------------
+#     @app.callback(
+#         Output(label_id, "children"),
+#         Output(store_id, "data"),
+#         Input("data-submit-button", "n_clicks"),
+#         State(store_id, "data"),
+#         prevent_initial_call=True,
+#     )
+#     def handle_submit(submit_clicks, store_data):
+#         """Build the brain data and update global state when submit is clicked."""
+#         if not isinstance(store_data, dict):
+#             store_data = {}
+
+#         fc_cfg = store_data.get("fc_cfg", {})
+#         loc_cfg = store_data.get("loc_cfg", {})
+#         directed = store_data.get("directed", False)
+
+#         # Check if we have both FC and location configs
+#         if not fc_cfg or not loc_cfg:
+#             return "Please select both FC data and locations", store_data
+
+#         try:
+#             # Build the final dataset
+#             bd, meta, slider = loader.build_braindata(fc_cfg, loc_cfg, directed)
+
+#             # Save into global_state
+#             global_state.brain_data = bd
+#             global_state.threshold = Threshold()
+#             global_state.viz = VizUIManager(bd, global_state.threshold)
+
+#             # Update store with metadata
+#             store_data["fc_meta"] = meta["fc"].__dict__
+#             store_data["loc_meta"] = meta["loc"].__dict__
+
+#             # Create success label
+#             fc_name = fc_cfg.get("name", "Unknown FC")
+#             loc_name = loc_cfg.get("name", "Unknown Locations")
+#             label = f"✓ Loaded: {fc_name} | {loc_name}"
+
+#             return label, store_data
+
+#         except Exception as e:
+#             print(f"Error building dataset: {e}")
+#             return f"Error: {str(e)}", store_data
 
 
 def _map_colors_for_name(name: str):

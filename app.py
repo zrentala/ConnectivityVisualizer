@@ -39,7 +39,6 @@ global_state = GlobalAppState()
 app = Dash(
     __name__,
     external_stylesheets=[dbc.themes.CYBORG],
-    suppress_callback_exceptions=True
 )
 
 server = app.server  # <-- expose Flask server explicitly
@@ -50,4 +49,4 @@ app.layout = create_layout()
 register_callbacks(app, global_state)
 
 if __name__ == "__main__":
-    app.run(debug=False)
+    app.run(debug=True)

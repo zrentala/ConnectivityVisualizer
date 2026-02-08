@@ -447,209 +447,190 @@ def get_fc_options():
 
 
 def create_data_component() -> html.Div:
-    """Two-step data selection UI (Step 1: FC, Step 2: locations) with radios wrapping each section."""
+    """Data loader UI with two sections: FC data (top) and locations (bottom)."""
 
-    # step_indicator = html.Div(
-    #     id="data-step-indicator",
-    #     children="Step 1: Load FC data",
-    #     className="mb-2 fw-bold",
-    # )
-
-    add_data_button = dbc.Button(
-        "+",
-        id="data-add_dataset-button",
-        color="primary",
-        size="sm",
-        className="ms-2",
-        title="Add or replace dataset",
-        n_clicks=0,
+    # =====================================================================
+    # SECTION 1: FC Data
+    # =====================================================================
+    
+    # Mode selector for FC
+    fc_mode_selector = html.Div(
+        [
+            html.H5("Functional Connectivity Data", className="mb-3"),
+            dcc.Dropdown(
+                id="data-fc-mode-selector",
+                options=[
+                    {"label": "Upload", "value": "upload"},
+                    {"label": "Preset", "value": "preset"},
+                    {"label": "Simulate", "value": "simulate"},
+                ],
+                value="upload",
+                style={"maxWidth": "200px"},
+                clearable=False,
+            ),
+            dcc.Store(
+                id="data-fc-mode-store",
+                data="upload",
+            ),
+        ],
+        className="mb-4",
     )
+
+    # Upload settings for FC
+    fc_upload_settings = dbc.Card(
+        id="data-fc-upload-settings",
+        children=[
+            dbc.CardBody([
+                html.H6("Upload FC data"),
+                dcc.Upload(
+                    id="data-fc-upload",
+                    children=html.Div(["Drag and drop or ", html.A("select a file")]),
+                    multiple=False,
+                    className="border p-3 text-center",
+                ),
+            ]),
+        ],
+        className="p-3 mb-2 border rounded bg-light",
+    )
+
+    # Preset settings for FC
+    fc_preset_settings = dbc.Card(
+        id="data-fc-preset-settings",
+        # style={"display": "none"},
+        children=[
+            dbc.CardBody([
+                html.H6("Select FC dataset", className="mb-3"),
+                create_dropdown(
+                    id="data-fc-preset-dropdown",
+                    options=get_fc_options(),
+                    clearable=True,
+                ),
+            ]),
+        ],
+        className="p-3 mb-2 border rounded bg-light",
+    )
+
+    # Simulate settings for FC
+    fc_simulate_settings = dbc.Card(
+        id="data-fc-simulate-settings",
+        style={"display": "none"},
+        children=[
+            dbc.CardBody([
+                html.H6("Simulated FC Data Parameters", className="mb-3"),
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Label("# electrodes"),
+                        dbc.Input(id="data-fc-sim-nelec", type="number", value=20, min=1),
+                    ], md=6),
+                    dbc.Col([
+                        dbc.Label("# FC matrices"),
+                        dbc.Input(id="data-fc-sim-nmat", type="number", value=10, min=1),
+                    ], md=6),
+                ]),
+            ]),
+        ],
+        className="p-3 mb-2 border rounded bg-light",
+    )
+
+    # FC section container
+    fc_section = html.Div(
+        [
+            fc_mode_selector,
+            fc_upload_settings,
+            fc_preset_settings,
+            fc_simulate_settings,
+        ],
+    )
+
+    # =====================================================================
+    # SECTION 2: Location Data
+    # =====================================================================
+
+    # Mode selector for locations
+    loc_mode_selector = html.Div(
+        [
+            html.H5("Location Data", className="mb-3"),
+            dcc.Dropdown(
+                id="data-loc-mode-selector",
+                options=[
+                    {"label": "Upload", "value": "upload"},
+                    {"label": "Preset", "value": "preset"},
+                    {"label": "Simulate", "value": "simulate"},
+                ],
+                value="upload",
+                style={"maxWidth": "200px"},
+                clearable=False,
+            ),
+            dcc.Store(
+                id="data-loc-mode-store",
+                data="upload",
+            ),
+        ],
+        className="mb-4",
+    )
+
+    # Upload settings for locations
+    loc_upload_settings = dbc.Card(
+        id="data-loc-upload-settings",
+        children=[
+            dbc.CardBody([
+                html.H6("Upload locations"),
+                dcc.Upload(
+                    id="data-loc-upload",
+                    children=html.Div(["Drag and drop or ", html.A("select a file")]),
+                    className="border p-3 text-center",
+                ),
+            ]),
+        ],
+        className="p-3 mb-2 border rounded bg-light",
+    )
+
+    # Preset settings for locations
+    loc_preset_settings = dbc.Card(
+        id="data-loc-preset-settings",
+        style={"display": "none"},
+        children=[
+            dbc.CardBody([
+                html.H6("Select locations", className="mb-3"),
+                create_dropdown(
+                    id="data-loc-preset-dropdown",
+                    options=get_loc_options(),
+                ),
+            ]),
+        ],
+        className="p-3 mb-2 border rounded bg-light",
+    )
+
+    # Simulate settings for locations
+    loc_simulate_settings = dbc.Card(
+        id="data-loc-simulate-settings",
+        style={"display": "none"},
+        children=[
+            dbc.CardBody([
+                html.H6("Simulated locations will be generated based on FC data."),
+            ]),
+        ],
+        className="p-3 mb-2 border rounded bg-light",
+    )
+
+    # Location section container
+    loc_section = html.Div(
+        [
+            loc_mode_selector,
+            loc_upload_settings,
+            loc_preset_settings,
+            loc_simulate_settings,
+        ],
+    )
+
+    # =====================================================================
+    # Dataset status and slider
+    # =====================================================================
 
     data_label = html.Span(
         id="data-dataset-label",
         children="No dataset loaded",
-        className="ms-2",
-    )
-
-    # ---------- STEP 1: FC ----------
-    fc_source = dbc.RadioItems(
-        id="data-fc-radio",
-        options=[
-            {"label": html.Div([
-                dbc.Card(
-                    id="data-fc-radio-upload-card",
-                    children=[
-                        html.H6("Upload FC data"),
-                        dcc.Upload(
-                            id="data-fc-upload",
-                            children=html.Div(["Drag and drop or ", html.A("select a file")]),
-                            multiple=False,
-                            className="border p-3 text-center",
-                        ),
-                    ],
-                    className="p-3 mb-2 border rounded bg-light",
-                )
-            ]), "value": "upload"},
-
-            {"label": html.Div([
-                dbc.Card(
-                    id="data-fc-radio-preset-card",
-                    children=[
-                        html.H6("Preset FC dataset"),
-                        create_dropdown(
-                            id="data-fc-preset-dropdown",
-                            options=get_fc_options(),
-                            clearable=True,
-                        ),
-                    ],
-                    className="p-3 mb-2 border rounded bg-light",
-                )
-            ]), "value": "preset"},
-
-            {"label": html.Div([
-                dbc.Card(
-                    id="data-fc-radio-sim-card",
-                    children=[
-                        html.H6("Simulated FC data"),
-                        dbc.Row([
-                            dbc.Col([
-                                dbc.Label("# electrodes"),
-                                dbc.Input(id="data-fc-sim-nelec", type="number", value=20, min=1),
-                            ], md=4),
-
-                            dbc.Col([
-                                dbc.Label("# FC matrices"),
-                                dbc.Input(id="data-fc-sim-nmat", type="number", value=10, min=1),
-                            ], md=4),
-
-                            dbc.Col([
-                                dbc.Label("Directed?"),
-                                dbc.Checkbox(id="data-directed-checkbox", value=False),
-                            ], md=4),
-                        ]),
-                        # html.Div("Simulated FC will be generated on Next.", className="text-muted mt-2"),
-                    ],
-                    className="p-3 mb-2 border rounded bg-light",
-                )
-            ]), "value": "simulate"},
-        ],
-
-        value="upload",
-        inline=False,
-        className="radio-wrapped-group w-100",
-    )
-
-
-    step1_view = html.Div(
-        id="data-step1-view",
-        children=[
-            html.H5("Step 1: Load functional connectivity (FC) data", className="mb-3"),
-            fc_source
-        ],
-        className="w-100"
-    )
-
-    # ---------- STEP 2: Locations ----------
-    loc_source = dbc.RadioItems(
-        id="data-loc-radio",
-        options=[
-            {"label": html.Div([
-                dbc.Card(
-                    id="data-loc-radio-upload-card",
-                    children=[
-                        html.H6("Upload locations"),
-                        dcc.Upload(
-                            id="data-loc-upload",
-                            children=html.Div(["Drag and drop or ", html.A("select a file")]),
-                            className="border p-3 text-center",
-                        ),
-                    ],
-                    className="p-3 mb-2 border rounded bg-light",
-                )
-            ]), "value": "upload"},
-
-            {"label": html.Div([
-                dbc.Card(
-                    id="data-loc-radio-preset-card",
-                    children=[
-                        html.H6("Preset locations"),
-                        create_dropdown(
-                            id="data-loc-preset-dropdown",
-                            options=get_loc_options(),
-                        ),
-                    ],
-                    className="p-3 mb-2 border rounded bg-light",
-                )
-            ]), "value": "preset"},
-
-            {"label": html.Div([
-                dbc.Card(
-                    id="data-loc-radio-sim-card",
-                    children=[
-                        html.H6("Simulated locations"),
-                        # html.Div("Locations will be generated based on FC when you click Next."),
-                    ],
-                    className="p-3 mb-2 border rounded bg-light",
-                )
-            ]), "value": "simulate"},
-        ],
-        value="upload",
-        # inline=False,
-    )
-
-
-    step2_view = html.Div(
-        id="data-step2-view",
-        style={"display": "none"},
-        children=[
-            html.H5("Step 2: Load location data", className="mb-3"),
-            html.Div(
-                id="data-fc-summary",
-                className="mb-3 fst-italic",
-                children="No FC data loaded yet.",
-            ),
-            loc_source
-        ],
-    )
-
-    data_modal = dbc.Modal(
-        [
-            dbc.ModalHeader("Add or replace dataset"),
-            dbc.ModalBody(
-                [
-                    step1_view,
-                    step2_view,
-                    html.Div(id="data-error-message", className="text-danger mt-2"),
-                ]
-            ),
-            dbc.ModalFooter(
-                [
-                    dbc.Button(
-                        "Back",
-                        id="data-back-button",
-                        color="secondary",
-                        n_clicks=0,
-                        className="me-auto",
-                    ),
-                    dbc.Button(
-                        "Next",
-                        id="data-next-button",
-                        color="primary",
-                        n_clicks=0,
-                        className="me-2",
-                    ),
-                ]),
-        ],
-        id="data-modal",
-        is_open=False,
-        centered=True,
-        backdrop="static",
-        size="",
-    )
-
-    data_store = dcc.Store(
-        id="data-store",
-        data={"step": 1, "fc_cfg": {}, "loc_cfg": {}, "fc_meta": {}, "loc_meta": {}},
+        className="ms-2 fw-bold text-success",
     )
 
     animation_slider = create_slider(
@@ -661,20 +642,56 @@ def create_data_component() -> html.Div:
         default=0,
     )
 
+    data_store = dcc.Store(
+        id="data-store",
+        data={"fc_cfg": {}, "loc_cfg": {}, "fc_meta": {}, "loc_meta": {}},
+    )
+
+    # =====================================================================
+    # Submit Button
+    # =====================================================================
+
+    submit_button = dbc.Button(
+        "Load Dataset",
+        id="data-submit-button",
+        color="success",
+        size="lg",
+        className="w-100",
+        n_clicks=0,
+    )
+
+    # =====================================================================
+    # Main Container
+    # =====================================================================
+
     return dbc.Container(
         [
+            # Header with dataset status
             dbc.Row(
                 [
                     dbc.Col(
-                        [dbc.Label("Dataset:"), data_label, add_data_button],
+                        [dbc.Label("Dataset:"), data_label],
                         width="auto",
                     )
                 ],
-                className="mb-3",
+                className="mb-4",
             ),
-            # step_indicator,
+            # FC Section
+            dbc.Card(
+                dbc.CardBody(fc_section),
+                className="mb-4",
+            ),
+            # Location Section
+            dbc.Card(
+                dbc.CardBody(loc_section),
+                className="mb-4",
+            ),
+            # Submit button
+            submit_button,
+            # Animation slider
+            html.Div(className="mt-4"),
             animation_slider,
-            data_modal,
+            # Data store
             data_store,
         ],
         fluid=True,
