@@ -496,7 +496,7 @@ def create_data_component() -> html.Div:
     # Preset settings for FC
     fc_preset_settings = dbc.Card(
         id="data-fc-preset-settings",
-        # style={"display": "none"},
+        style={"display": "none"},
         children=[
             dbc.CardBody([
                 html.H6("Select FC dataset", className="mb-3"),
@@ -526,6 +526,15 @@ def create_data_component() -> html.Div:
                         dbc.Label("# FC matrices"),
                         dbc.Input(id="data-fc-sim-nmat", type="number", value=10, min=1),
                     ], md=6),
+                    dbc.Col([
+                        # dbc.Label("Directed graph"),
+                        dbc.Checklist(
+                            id="data-directed-checkbox",
+                            options=[{"label": "Directed graph", "value": True}],
+                            value=[],
+                            inline=True,
+                        )
+                    ], md=6)
                 ]),
             ]),
         ],
@@ -702,44 +711,40 @@ def create_data_component() -> html.Div:
 def create_stat_component():
     return html.Div(
         [
-            dbc.Card(
-                dbc.CardBody(
-                    [
-                        html.H5("Network Statistics", className="card-title mb-3"),
-
-                        html.Div(
-                            [
-                                html.Div([
-                                    html.Div("Total Nodes:", className="fw-bold me-2"),
-                                    html.Div(id="stat-collapse-total_nodes-container")
-                                ], className="d-flex justify-content-between"),
-
-                                html.Hr(className="my-2"),
-
-                                html.Div([
-                                    html.Div("Total Edges:", className="fw-bold me-2"),
-                                    html.Div(id="stat-collapse-total_edges-container")
-                                ], className="d-flex justify-content-between"),
-
-                                html.Hr(className="my-2"),
-
-                                html.Div([
-                                    html.Div("Visible Edges:", className="fw-bold me-2"),
-                                    html.Div(id="stat-collapse-visible_edges-container")
-                                ], className="d-flex justify-content-between"),
-                            ],
-                        ),
-                    ],
+            dbc.Collapse(
+                dbc.Card(
+                    dbc.CardBody(
+                        [
+                            html.H5("Network Statistics", className="card-title mb-3"),
+                            html.Div(
+                                [
+                                    html.Div([
+                                        html.Div("Total Nodes:", className="fw-bold me-2"),
+                                        html.Div(id="stat-collapse-total_nodes-container")
+                                    ], className="d-flex justify-content-between"),
+                                    html.Hr(className="my-2"),
+                                    html.Div([
+                                        html.Div("Total Edges:", className="fw-bold me-2"),
+                                        html.Div(id="stat-collapse-total_edges-container")
+                                    ], className="d-flex justify-content-between"),
+                                    html.Hr(className="my-2"),
+                                    html.Div([
+                                        html.Div("Visible Edges:", className="fw-bold me-2"),
+                                        html.Div(id="stat-collapse-visible_edges-container")
+                                    ], className="d-flex justify-content-between"),
+                                ],
+                            ),
+                        ],
+                    ),
                 ),
-            
+                id="stats-collapse",
+                is_open=True,
             ),
         ],
         style={
             "display": "flex",
             "flexDirection": "column",
-            "alignItems": "flex-end",  # right aligned
+            "alignItems": "flex-end",
             "justifyContent": "flex-start",
-            # "marginLeft": "auto",  # pushes component to the right!
         },
     )
-

@@ -11,7 +11,7 @@ def create_layout():
     threshold_comp = create_thresh_component()
     viz_controls = create_viz_controls()
     data_component = create_data_component()
-    stat_component = create_stat_component()
+    # stat_component = create_stat_component()
     initial_fig = None
 
     left = html.Div(
@@ -50,10 +50,25 @@ def create_layout():
             ),
 
             html.Div(
-                stat_component,
-                id="right-stats-container",
-
-            ),
+                    [
+                        dbc.Button(
+                            ">",
+                            id="stat-toggle-btn",
+                            className="mb-2",
+                            color="primary",
+                            size="sm",
+                        ),
+                        create_stat_component(),
+                    ],
+                    id="right-stats-container",
+                    style={
+                        "flex": "0 0 260px",
+                        "overflow": "visible",
+                        "transition": "flex-basis 0.3s",
+                        "borderLeft": "1px solid #ccc",
+                        "position": "relative",
+                    },
+                ),
         ],
         style={
             "height": "100%",

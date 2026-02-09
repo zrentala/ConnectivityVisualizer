@@ -253,7 +253,7 @@ def update_fc_options():
     ]
 
 def register_data_callbacks(app: Dash, global_state: GlobalAppState):
-    print("=== REGISTERING DATA CALLBACKS ===")
+    # print("=== REGISTERING DATA CALLBACKS ===")
     loader = DataLoader()
 
     # IDs
@@ -288,6 +288,145 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
     # ---------------------------------------------------
     # MODE SWITCHING CALLBACKS
     # ---------------------------------------------------
+
+    @app.callback(
+        Output(label_id, "children"),
+        Output(store_id, "data"),
+        Output(slider_id, "max"),
+        Output(slider_id, "marks"),
+        Output(slider_id, "value"),
+        
+        Input("data-submit-button", "n_clicks"),
+        Input(fc_upload_id, "contents"),
+        Input(fc_preset_id, "value"),
+        Input(fc_sim_nelec_id, "value"),
+        Input(fc_sim_nmat_id, "value"),
+        Input(loc_upload_id, "contents"),
+        Input(loc_preset_id, "value"),
+        Input(fc_mode_store_id, "data"),
+        Input(loc_mode_store_id, "data"),
+        Input(directed_id, "value"),
+        
+        State(fc_upload_id, "filename"),
+        State(loc_upload_id, "filename"),
+        State(store_id, "data"),
+        prevent_initial_call=False,
+)
+    def load_and_submit_data(
+        submit_clicks,
+        fc_contents,
+        fc_preset_val,
+        fc_sim_nelec,
+        fc_sim_nmat,
+        loc_contents,
+        loc_preset_val,
+        fc_mode_val,
+        loc_mode_val,
+        directed_val,
+        fc_filename,
+        loc_filename,
+        store_data,
+    ):
+        """Combined callback: update configuration and load data when submitted."""
+        
+        if not isinstance(store_data, dict):
+            store_data = {}
+        
+        ctx = callback_context
+        if not ctx.triggered:
+            trigger_id = None
+        else:
+            trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        
+        fc_src = fc_mode_val or "upload"
+        loc_src = loc_mode_val or "upload"
+        
+        # Convert checklist value to boolean
+        is_directed = bool(directed_val and True in directed_val)
+        
+        try:
+            # Check if we can build FC config
+            can_build_fc = (
+                (fc_src == "upload" and fc_contents is not None) or
+                (fc_src == "preset" and fc_preset_val is not None) or
+                (fc_src == "simulate" and fc_sim_nelec is not None and fc_sim_nmat is not None)
+            )
+            
+            if not can_build_fc:
+                return "Please configure FC data", store_data, 0, {0: "0"}, 0
+            
+            # Build FC configuration
+            fc_cfg = loader.make_fc_cfg(
+                source=fc_src,
+                upload=(fc_contents, fc_filename),
+                preset=fc_preset_val,
+                simulate=(fc_sim_nelec, fc_sim_nmat),
+            )
+            
+            if fc_cfg["type"] == "sim":
+                fc_cfg["directed"] = is_directed
+            
+            store_data["fc_cfg"] = fc_cfg
+            store_data["directed"] = is_directed
+            
+            # Check if we can build location config
+            n_elec = fc_cfg.get("n_elec", 0)
+            can_build_loc = (
+                (loc_src == "upload" and loc_contents is not None) or
+                (loc_src == "preset" and loc_preset_val is not None) or
+                (loc_src == "simulate" and n_elec > 0)
+            )
+            
+            if not can_build_loc:
+                return "Please configure location data", store_data, 0, {0: "0"}, 0
+            
+            # Build location configuration
+            loc_cfg = loader.make_loc_cfg(
+                source=loc_src,
+                upload=(loc_contents, loc_filename),
+                preset=loc_preset_val,
+                n_elec=n_elec,
+            )
+            
+            store_data["loc_cfg"] = loc_cfg
+            
+            n_mats = fc_cfg.get("n_mat", 0)
+            slider_max = max(0, n_mats - 1)
+            marks = {0: "0", slider_max: str(slider_max)} if slider_max > 0 else {0: "0"}
+            slider_value = 0
+            
+            # Check if submit was clicked
+            if trigger_id == "data-submit-button" and submit_clicks and submit_clicks > 0:
+                if not fc_cfg or not loc_cfg:
+                    return "Please select both FC data and locations", store_data, slider_max, marks, slider_value
+                
+                bd, meta, slider = loader.build_braindata(fc_cfg, loc_cfg, is_directed)
+                
+                global_state.brain_data = bd
+                global_state.threshold = Threshold()
+                global_state.viz = VizUIManager(bd, global_state.threshold)
+                
+                store_data["fc_meta"] = meta["fc"].__dict__
+                store_data["loc_meta"] = meta["loc"].__dict__
+                
+                fc_name = fc_cfg.get("name", "Unknown FC")
+                loc_name = loc_cfg.get("name", "Unknown Locations")
+                label = f"✓ Loaded: {fc_name} | {loc_name}"
+                
+                return label, store_data, slider_max, marks, slider_value
+            
+            else:
+                fc_name = fc_cfg.get("name", "Unknown")
+                loc_name = loc_cfg.get("name", "Unknown")
+                label = f"Ready to load: {fc_name} | {loc_name}"
+                
+                return label, store_data, slider_max, marks, slider_value
+        
+        except Exception as e:
+            print(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return f"Error: {str(e)}", store_data, 0, {0: "0"}, 0
     @app.callback(
         Output(fc_mode_store_id, "data"),
         Output(fc_upload_settings_id, "style"),
@@ -324,123 +463,123 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
         
         return mode, upload_style, preset_style, simulate_style
 
-    # ---------------------------------------------------
-    # COMBINED DATA LOADING AND SUBMISSION CALLBACK
-    # ---------------------------------------------------
-    @app.callback(
-        Output(label_id, "children"),
-        Output(store_id, "data"),
-        Output(slider_id, "max"),
-        Output(slider_id, "marks"),
-        Output(slider_id, "value"),
+    # # ---------------------------------------------------
+    # # COMBINED DATA LOADING AND SUBMISSION CALLBACK
+    # # ---------------------------------------------------
+    # @app.callback(
+    #     Output(label_id, "children"),
+    #     Output(store_id, "data"),
+    #     Output(slider_id, "max"),
+    #     Output(slider_id, "marks"),
+    #     Output(slider_id, "value"),
         
-        Input("data-submit-button", "n_clicks"),
-        Input(fc_upload_id, "contents"),
-        Input(fc_preset_id, "value"),
-        Input(fc_sim_nelec_id, "value"),
-        Input(fc_sim_nmat_id, "value"),
-        Input(loc_upload_id, "contents"),
-        Input(loc_preset_id, "value"),
-        Input(fc_mode_store_id, "data"),
-        Input(loc_mode_store_id, "data"),
-        Input(directed_id, "value"),
+    #     Input("data-submit-button", "n_clicks"),
+    #     Input(fc_upload_id, "contents"),
+    #     Input(fc_preset_id, "value"),
+    #     Input(fc_sim_nelec_id, "value"),
+    #     Input(fc_sim_nmat_id, "value"),
+    #     Input(loc_upload_id, "contents"),
+    #     Input(loc_preset_id, "value"),
+    #     Input(fc_mode_store_id, "data"),
+    #     Input(loc_mode_store_id, "data"),
+    #     Input(directed_id, "value"),
         
-        State(fc_upload_id, "filename"),
-        State(loc_upload_id, "filename"),
-        State(store_id, "data"),
-        prevent_initial_call=False,
-    )
-    def load_and_submit_data(
-        submit_clicks,
-        fc_contents,
-        fc_preset_val,
-        fc_sim_nelec,
-        fc_sim_nmat,
-        loc_contents,
-        loc_preset_val,
-        fc_mode_val,
-        loc_mode_val,
-        directed_val,
-        fc_filename,
-        loc_filename,
-        store_data,
-    ):
-        """Combined callback: update configuration and load data when submitted."""
+    #     State(fc_upload_id, "filename"),
+    #     State(loc_upload_id, "filename"),
+    #     State(store_id, "data"),
+    #     prevent_initial_call=False,
+    # )
+    # def load_and_submit_data(
+    #     submit_clicks,
+    #     fc_contents,
+    #     fc_preset_val,
+    #     fc_sim_nelec,
+    #     fc_sim_nmat,
+    #     loc_contents,
+    #     loc_preset_val,
+    #     fc_mode_val,
+    #     loc_mode_val,
+    #     directed_val,
+    #     fc_filename,
+    #     loc_filename,
+    #     store_data,
+    # ):
+    #     """Combined callback: update configuration and load data when submitted."""
         
-        if not isinstance(store_data, dict):
-            store_data = {}
+    #     if not isinstance(store_data, dict):
+    #         store_data = {}
         
-        ctx = callback_context
-        if not ctx.triggered:
-            trigger_id = None
-        else:
-            trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    #     ctx = callback_context
+    #     if not ctx.triggered:
+    #         trigger_id = None
+    #     else:
+    #         trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
         
-        fc_src = fc_mode_val or "upload"
-        loc_src = loc_mode_val or "upload"
+    #     fc_src = fc_mode_val or "upload"
+    #     loc_src = loc_mode_val or "upload"
         
-        try:
-            # Always update configuration
-            fc_cfg = loader.make_fc_cfg(
-                source=fc_src,
-                upload=(fc_contents, fc_filename),
-                preset=fc_preset_val,
-                simulate=(fc_sim_nelec, fc_sim_nmat),
-            )
+    #     try:
+    #         # Always update configuration
+    #         fc_cfg = loader.make_fc_cfg(
+    #             source=fc_src,
+    #             upload=(fc_contents, fc_filename),
+    #             preset=fc_preset_val,
+    #             simulate=(fc_sim_nelec, fc_sim_nmat),
+    #         )
             
-            if fc_cfg["type"] == "sim":
-                fc_cfg["directed"] = bool(directed_val)
+    #         if fc_cfg["type"] == "sim":
+    #             fc_cfg["directed"] = bool(directed_val)
             
-            store_data["fc_cfg"] = fc_cfg
-            store_data["directed"] = bool(directed_val)
+    #         store_data["fc_cfg"] = fc_cfg
+    #         store_data["directed"] = bool(directed_val)
             
-            n_elec = fc_cfg.get("n_elec", 0)
-            loc_cfg = loader.make_loc_cfg(
-                source=loc_src,
-                upload=(loc_contents, loc_filename),
-                preset=loc_preset_val,
-                n_elec=n_elec,
-            )
+    #         n_elec = fc_cfg.get("n_elec", 0)
+    #         loc_cfg = loader.make_loc_cfg(
+    #             source=loc_src,
+    #             upload=(loc_contents, loc_filename),
+    #             preset=loc_preset_val,
+    #             n_elec=n_elec,
+    #         )
             
-            store_data["loc_cfg"] = loc_cfg
+    #         store_data["loc_cfg"] = loc_cfg
             
-            n_mats = fc_cfg.get("n_mat", 0)
-            slider_max = max(0, n_mats - 1)
-            marks = {0: "0", slider_max: str(slider_max)} if slider_max > 0 else {0: "0"}
-            slider_value = 0
+    #         n_mats = fc_cfg.get("n_mat", 0)
+    #         slider_max = max(0, n_mats - 1)
+    #         marks = {0: "0", slider_max: str(slider_max)} if slider_max > 0 else {0: "0"}
+    #         slider_value = 0
             
-            # Check if submit was clicked
-            if trigger_id == "data-submit-button" and submit_clicks and submit_clicks > 0:
-                if not fc_cfg or not loc_cfg:
-                    return "Please select both FC data and locations", store_data, slider_max, marks, slider_value
+    #         # Check if submit was clicked
+    #         if trigger_id == "data-submit-button" and submit_clicks and submit_clicks > 0:
+    #             if not fc_cfg or not loc_cfg:
+    #                 return "Please select both FC data and locations", store_data, slider_max, marks, slider_value
                 
-                bd, meta, slider = loader.build_braindata(fc_cfg, loc_cfg, bool(directed_val))
+    #             bd, meta, slider = loader.build_braindata(fc_cfg, loc_cfg, bool(directed_val))
                 
-                global_state.brain_data = bd
-                global_state.threshold = Threshold()
-                global_state.viz = VizUIManager(bd, global_state.threshold)
+    #             global_state.brain_data = bd
+    #             global_state.threshold = Threshold()
+    #             global_state.viz = VizUIManager(bd, global_state.threshold)
                 
-                store_data["fc_meta"] = meta["fc"].__dict__
-                store_data["loc_meta"] = meta["loc"].__dict__
+    #             store_data["fc_meta"] = meta["fc"].__dict__
+    #             store_data["loc_meta"] = meta["loc"].__dict__
                 
-                fc_name = fc_cfg.get("name", "Unknown FC")
-                loc_name = loc_cfg.get("name", "Unknown Locations")
-                label = f"✓ Loaded: {fc_name} | {loc_name}"
+    #             fc_name = fc_cfg.get("name", "Unknown FC")
+    #             loc_name = loc_cfg.get("name", "Unknown Locations")
+    #             label = f"✓ Loaded: {fc_name} | {loc_name}"
                 
-                return label, store_data, slider_max, marks, slider_value
+    #             return label, store_data, slider_max, marks, slider_value
             
-            else:
-                fc_name = fc_cfg.get("name", "Unknown")
-                loc_name = loc_cfg.get("name", "Unknown")
-                label = f"Ready to load: {fc_name} | {loc_name}"
+    #         else:
+    #             fc_name = fc_cfg.get("name", "Unknown")
+    #             loc_name = loc_cfg.get("name", "Unknown")
+    #             label = f"Ready to load: {fc_name} | {loc_name}"
                 
-                return label, store_data, slider_max, marks, slider_value
+    #             return label, store_data, slider_max, marks, slider_value
         
-        except Exception as e:
-            print(f"Error: {e}")
-            import traceback
-            traceback.print_exc()
-            return f"Error: {str(e)}", store_data, 0, {0: "0"}, 0
+    #     except Exception as e:
+    #         print(f"Error: {e}")
+    #         import traceback
+    #         traceback.print_exc()
+    #         return f"Error: {str(e)}", store_data, 0, {0: "0"}, 0
 
 # def register_data_callbacks(app: Dash, global_state: GlobalAppState):
 #     print("=== REGISTERING DATA CALLBACKS ===")
@@ -714,42 +853,45 @@ def register_viz_control_callback(app: Dash):
         else:
             return hide, hide
 
-def register_stat_toggle_callback(app:Dash):
+def register_stat_toggle_callback(app: Dash):
     @app.callback(
         Output("stats-collapse", "is_open"),
         Output("right-stats-container", "style"),
         Output("stat-toggle-btn", "children"),
-
+        Output("stat-toggle-btn", "style"),
         Input("stat-toggle-btn", "n_clicks"),
         State("stats-collapse", "is_open"),
     )
     def toggle_stats(n, is_open):
         if n is None:
             raise PreventUpdate
-
         new_open = not is_open
-
         if new_open:
             new_style = {
                 "flex": "0 0 260px",  # EXPANDED WIDTH
-                "overflow": "hidden",
+                "overflow": "visible",
                 "transition": "flex-basis 0.3s",
                 "borderLeft": "1px solid #ccc",
+                "position": "relative",
             }
             arrow = ">"  # arrow pointing right = collapse
+            button_style = {}
         else:
             new_style = {
-                "flex": "0 0 0px",
-                "overflow": "hidden",
+                "flex": "0 0 40px",  # Space for button
+                "overflow": "visible",
                 "transition": "flex-basis 0.3s",
                 "borderLeft": "1px solid #ccc",
+                "position": "relative",
             }
             arrow = "<"
-
-        return new_open, new_style, arrow
-
-
-
+            button_style = {
+                "position": "absolute",
+                "left": "5px",
+                "top": "10px",
+                "zIndex": 1000,
+            }
+        return new_open, new_style, arrow, button_style
 def register_callbacks(app: Dash, global_state: GlobalAppState):
     """Attach all interaction callbacks to the Dash app."""
     register_visualization_callback(app, global_state)
