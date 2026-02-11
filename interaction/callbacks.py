@@ -1,3 +1,7 @@
+from analysis.graph import (
+    connection_density, global_efficiency, local_efficiency, modularity,
+    node_in_out_bidirectional_counts, node_connection_strengths
+)
 from dash import Input, Output, State, Dash, no_update, callback_context
 import numpy as np
 import plotly.graph_objects as go
@@ -193,32 +197,117 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         if global_state.viz is None or global_state.brain_data is None:
             return 0,0,0
         mask = global_state.viz._mask_cache
-        # I need to fix the diagonals
-        # print(mask)
         np.fill_diagonal(mask, False)
-
         n_nodes = global_state.brain_data.n_nodes
-                
         # Total edges
         if global_state.brain_data.directed:
             total_edges = n_nodes * (n_nodes - 1)
         else:
-            total_edges = n_nodes * (n_nodes - 1) // 2  # integer division for undirected
-
-        # Mask for visible edges
+            total_edges = n_nodes * (n_nodes - 1) // 2
         mask = global_state.viz._mask_cache.copy()
         np.fill_diagonal(mask, False)
-
         if global_state.brain_data.directed:
             visible_edges = int(mask.sum())
         else:
-            visible_edges = int(np.triu(mask, k=1).sum())   
+            visible_edges = int(np.triu(mask, k=1).sum())
+
+        # --- Graph metrics ---
+        G = global_state.viz._graph_cache if hasattr(global_state.viz, '_graph_cache') else None
+        if G is None:
+            from analysis.graph import GraphAnalysis
+            ga = GraphAnalysis(global_state.brain_data.conn_mat, global_state.brain_data.labels, global_state.brain_data.directed)
+            G = ga.graph
+        dens = connection_density(G)
+        g_eff = global_efficiency(G)
+        l_eff = local_efficiency(G)
+        mod, part = modularity(G, directed=global_state.brain_data.directed)
+        node_counts = node_in_out_bidirectional_counts(G, global_state.brain_data.directed)
+        node_strengths = node_connection_strengths(G, global_state.brain_data.directed)
+
+        # Top node degrees/strengths (show top 3)
+        in_deg = sorted(node_counts.items(), key=lambda x: x[1]['in_degree'], reverse=True)[:3]
+        out_deg = sorted(node_counts.items(), key=lambda x: x[1]['out_degree'], reverse=True)[:3]
+        bi_deg = sorted(node_counts.items(), key=lambda x: x[1]['bidirectional'], reverse=True)[:3]
+        ncs = sorted(node_strengths.items(), key=lambda x: x[1]['in_strength']+x[1]['out_strength'], reverse=True)[:3]
+
+        # Format for display
+        def fmt_top(lst, key):
+            return ', '.join([f"{n} ({v[key]})" for n, v in lst])
+        def fmt_ncs(lst):
+            return ', '.join([f"{n} ({v['in_strength']+v['out_strength']:.2f})" for n, v in lst])
 
         return (
             n_nodes,
             total_edges,
             visible_edges,
+            f"{dens:.3f}",
+            f"{g_eff:.3f}",
+            f"{l_eff:.3f}",
+            f"{mod:.3f}",
+            fmt_top(in_deg, 'in_degree'),
+            fmt_ncs(ncs),
         )
+
+# --- Graph Controls and Node Shading Callback ---
+from dash.dependencies import Output, Input, State
+@app.callback(
+    Output("split-right-fig", "figure"),
+    Output("graph-legend", "children"),
+    Input("graph-metric-radio", "value"),
+    Input("graph-shade-top-x-slider", "value"),
+    Input("graph-community-btn", "n_clicks"),
+    State("split-right-fig", "figure"),
+)
+def update_graph_controls(metric, top_x, community_clicks, fig):
+    if global_state.viz is None or global_state.brain_data is None:
+        return fig, ""
+    from analysis.graph import GraphAnalysis, node_in_out_bidirectional_counts, node_connection_strengths, modularity
+    ga = GraphAnalysis(global_state.brain_data.conn_mat, global_state.brain_data.labels, global_state.brain_data.directed)
+    G = ga.graph
+    node_counts = node_in_out_bidirectional_counts(G, global_state.brain_data.directed)
+    node_strengths = node_connection_strengths(G, global_state.brain_data.directed)
+    node_colors = {}
+    legend = []
+    ctx = callback_context
+    triggered = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
+    labels = global_state.brain_data.labels
+    if triggered == "graph-community-btn" and community_clicks:
+        mod, part = modularity(G, directed=global_state.brain_data.directed)
+        comms = {}
+        for node, cid in part.items():
+            comms.setdefault(cid, []).append(node)
+        color_map = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33", "#a65628", "#f781bf", "#999999"]
+        for i, (cid, nodes) in enumerate(comms.items()):
+            color = color_map[i % len(color_map)]
+            for n in nodes:
+                node_colors[n] = color
+            legend.append(html.Div([html.Span(style={"backgroundColor": color, "display": "inline-block", "width": "1em", "height": "1em", "marginRight": "0.5em"}), f"Community {cid} ({len(nodes)})"]))
+    else:
+        # Metric-based shading
+        if metric == "in_degree":
+            values = {n: v["in_degree"] for n, v in node_counts.items()}
+        elif metric == "out_degree":
+            values = {n: v["out_degree"] for n, v in node_counts.items()}
+        elif metric == "bidirectional":
+            values = {n: v["bidirectional"] for n, v in node_counts.items()}
+        elif metric == "node_connection_strengths":
+            values = {n: v["in_strength"] + v["out_strength"] for n, v in node_strengths.items()}
+        else:
+            values = {n: 0 for n in node_counts}
+        top_nodes = sorted(values, key=values.get, reverse=True)[:top_x]
+        highlight_color = "#FFD700"
+        for n in top_nodes:
+            node_colors[n] = highlight_color
+        legend.append(html.Div([html.Span(style={"backgroundColor": highlight_color, "display": "inline-block", "width": "1em", "height": "1em", "marginRight": "0.5em"}), f"Top {top_x} nodes by {metric.replace('_',' ')}"]))
+
+    # Use the new set_node_colors method for node shading
+    if hasattr(global_state.viz, "set_node_colors"):
+        global_state.viz.set_node_colors(node_colors, labels)
+        fig_obj = global_state.viz.fig
+    else:
+        import plotly.graph_objs as go
+        fig_obj = go.Figure(fig)
+    return fig_obj, legend
 
 def update_loc_options(sd):
     print("Updating loc options with sd:", sd)

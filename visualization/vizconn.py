@@ -255,6 +255,18 @@ class ConnectivityViewHeatmap(ConnectivityView):
 
 
 class ConnectivityView2D(ConnectivityView, HandlesNodes):
+        def set_node_colors(self, node_color_map: dict, labels):
+            """
+            Set node colors for the current node trace based on a mapping {label: color}.
+            Used for graph controls (metric/community shading).
+            """
+            if self.fig is None or self._node_trace_idx is None:
+                return
+            node_trace = self.fig.data[self._node_trace_idx]
+            # Map label order to color
+            colors = [node_color_map.get(l, self.node_fill) for l in labels]
+            node_trace.marker.color = colors
+
     def __init__(
         self,
         chanlocs,
@@ -295,7 +307,6 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
 
     def _build_node_trace(self, fig, labels):
         x, y = self.locs[:, 0], self.locs[:, 1]
-        print(f"{self.node_size=}")
         nodes = go.Scattergl(
             x=x, y=y,
             mode="markers+text",
@@ -306,10 +317,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             ),
             text=labels,
             textfont=dict(color="black"),
-            # opacity=1,
-            # opacity=self.node_opacity,
-)
-
+        )
         fig.add_trace(nodes)
         self._node_trace_idx = len(fig.data) - 1
 
@@ -645,6 +653,17 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
 
 
 class ConnectivityView3D(ConnectivityView, HandlesNodes):
+        def set_node_colors(self, node_color_map: dict, labels):
+            """
+            Set node colors for the current node trace based on a mapping {label: color}.
+            Used for graph controls (metric/community shading).
+            """
+            if self.fig is None or self._node_trace_idx is None:
+                return
+            node_trace = self.fig.data[self._node_trace_idx]
+            # Map label order to color
+            colors = [node_color_map.get(l, self.node_fill) for l in labels]
+            node_trace.marker.color = colors
     def __init__(
         self,
         chanlocs,
