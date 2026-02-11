@@ -428,10 +428,18 @@ def create_viz_controls() -> html.Div:
 #         fluid=True, className=container_class
 #     )
 
+# def get_loc_options():
+#     presets = PRESET_LOCS.keys()
+#     # Normal case → real selectable options
+#     return [{"label": name, "value": name} for name in presets]
 def get_loc_options():
-    presets = PRESET_LOCS.keys()
-    # Normal case → real selectable options
-    return [{"label": name, "value": name} for name in presets]
+    return [
+        {
+            "label": f"{name} ({count} elecs)",
+            "value": name
+        }
+        for name, count in PRESET_LOCS.items()
+    ]
 
 def get_fc_options():
     presets = PRESET_CONFIGS
