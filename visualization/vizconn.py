@@ -454,34 +454,64 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         title=None,
     ) -> go.Figure:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
-        ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
-        # print("START")
         fig = go.Figure()
         with fig.batch_update():
             self._build_base_trace(fig)
-            # The node trace is always the *last* one in base:
-            
-            # print("build base")
 
-            ### CREATE EDGES
-            self._build_edge_traces(C=C, 
-                                    labels=labels,
-                                    directed=directed,
-                                    color_scale_info=color_scale_info,
-                                    fig=fig
-                                    )
-            # print("build edges")
+            # Vectorized edge creation
+            n_nodes = C.shape[0]
+            ij_iter = list(helpers._get_ij_iter(n_nodes, directed))
+            if ij_iter:
+                i_arr = np.array([i for i, j in ij_iter])
+                j_arr = np.array([j for i, j in ij_iter])
+                w_arr = C[i_arr, j_arr]
+                color_arr = [helpers._get_edge_color(
+                    edge_weight=w,
+                    zmin=zmin,
+                    zmax=zmax,
+                    colorscale=colorscale,
+                    default_neg_color=self.default_neg_color,
+                    default_pos_color=self.default_pos_color
+                ) for w in w_arr]
+                width_arr = [helpers._get_edge_width(
+                    edge_weight=w,
+                    scale=scale,
+                    width_range=self.edge_width_range
+                ) for w in w_arr]
+                P_arr = [self._get_edge_path(i, j) for i, j in zip(i_arr, j_arr)]
+                for i, j, w, color, width, P in zip(i_arr, j_arr, w_arr, color_arr, width_arr, P_arr):
+                    fig.add_trace(
+                        go.Scattergl(
+                            x=P[:, 0],
+                            y=P[:, 1],
+                            mode="lines",
+                            line=dict(color=color, width=width),
+                            opacity=self.edge_opacity,
+                            showlegend=False,
+                            hoverinfo="text",
+                            text=f"{labels[i]} → {labels[j]}<br>Weight: {w:.3f}",
+                            name=f"{labels[i]},{labels[j]}",
+                        )
+                    )
+                    self._edge_trace_idx[(i, j)] = len(fig.data) - 1
+                    if directed and len(P) >= 2:
+                        q0, q1 = P[-2], P[-1]
+                        fig.add_annotation(
+                            x=q1[0], y=q1[1],
+                            ax=q0[0], ay=q0[1],
+                            xref="x", yref="y",
+                            axref="x", ayref="y",
+                            showarrow=True,
+                            arrowhead=3,
+                            arrowsize=1,
+                            arrowwidth=width,
+                            arrowcolor=color,
+                        )
+                        self._arrow_trace_idx[(i, j)] = len(fig.layout.annotations) - 1
 
-            ### CACHE EDGES (i, j) --> idx
-
-            # self._edge_trace_idx = helpers._create_cache_edges(labels, fig)
             self._build_node_trace(fig, labels)
-
-            ### CREATE COLOR BAR
-            colorbar_trace_idx = helpers._add_colorbar_trace(fig=fig, colorscale=colorscale,zmin=zmin,zmax=zmax, viz_type=VizType.FIG2D)
+            colorbar_trace_idx = helpers._add_colorbar_trace(fig=fig, colorscale=colorscale, zmin=zmin, zmax=zmax, viz_type=VizType.FIG2D)
             self._colorbar_trace_idx = colorbar_trace_idx
-
-            ### ADD REST OF LAYOUT
             fig.update_layout(
                 xaxis=dict(
                     visible=False,
@@ -493,11 +523,8 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                 margin=dict(l=0, r=0, t=40, b=0),
                 showlegend=False,
                 plot_bgcolor="white",
-                
             )
-            # helpers._update_title(fig=fig, title=title)
         self.fig = fig
-        # print("FINISH")
         return fig
 
     def update_figure(self,
@@ -551,39 +578,63 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                     # opacity=self.node_opacity
                 )
 
-            traces_list = helpers._get_candidate_edges(edge_trace_idx=self._edge_trace_idx, old_thresh_mask=old_thresh_mask, new_thresh_mask=new_thresh_mask, update_type=update_type, directed=directed, n_nodes=C.shape[0])
-            # print(traces_list)
-            for (i, j), idx in traces_list:
-                
-                ### GET EDGE's CONN and MASK (BOOL)
-                w = C[i, j]
-                m = new_thresh_mask[i, j]
-                trace = fig.data[idx]
-                
-                ### HIDE IF MASK == FALSE
-                if directed and not m:
-                    ann_idx = self._arrow_trace_idx.get((i,j), None)
-                    arrow_ann = fig.layout.annotations[ann_idx]
-                    arrow_ann.visible = False  # fully hide
-                    trace.visible = False  # fully hide
-                    continue
-                if not directed and not m:
-                    # trace.opacity = 0.0
-                    # trace.hoverinfo = "skip"
-                    # trace.text = ""
-                    trace.visible = False  # fully hide
-                    
-                    continue
+              # Vectorized edge update
+            traces_list = helpers._get_candidate_edges(
+                edge_trace_idx=self._edge_trace_idx,
+                old_thresh_mask=old_thresh_mask,
+                new_thresh_mask=new_thresh_mask,
+                update_type=update_type,
+                directed=directed,
+                n_nodes=C.shape[0]
+            )
+            if traces_list:
+                # Unpack indices for vectorized access
+                idx_arr = np.array([idx for (_, _), idx in traces_list])
+                ij_arr = np.array([ij for (ij, _ ) in traces_list])
+                i_arr, j_arr = ij_arr[:,0], ij_arr[:,1]
+                w_arr = C[i_arr, j_arr]
+                m_arr = new_thresh_mask[i_arr, j_arr]
 
-                ### GET COLOR
-                color = helpers._get_edge_color(edge_weight=w, zmin=zmin, zmax=zmax, colorscale=colorscale, default_neg_color=self.default_neg_color, default_pos_color=self.default_pos_color)
-                P = self._get_edge_path(i, j)
-                ### GET WIDTH
-                width = helpers._get_edge_width(edge_weight=w, scale=scale, width_range=self.edge_width_range)
-                ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE TfHIS AN UPDATEABLE VALUE
-                trace.x = P[:, 0]
-                trace.y = P[:,1]
-                helpers._update_edge_trace(trace=trace, edge_weight=w, color=color, width=width, opacity=self.edge_opacity, label1=labels[i], label2=labels[j])
+                # Cache edge colors and widths
+                color_arr = [helpers._get_edge_color(
+                    edge_weight=w,
+                    zmin=zmin,
+                    zmax=zmax,
+                    colorscale=colorscale,
+                    default_neg_color=self.default_neg_color,
+                    default_pos_color=self.default_pos_color
+                ) for w in w_arr]
+                width_arr = [helpers._get_edge_width(
+                    edge_weight=w,
+                    scale=scale,
+                    width_range=self.edge_width_range
+                ) for w in w_arr]
+                # Cache edge paths
+                P_arr = [self._get_edge_path(i, j) for i, j in zip(i_arr, j_arr)]
+
+                for idx, i, j, w, m, color, width, P in zip(idx_arr, i_arr, j_arr, w_arr, m_arr, color_arr, width_arr, P_arr):
+                    trace = fig.data[idx]
+                    if directed and not m:
+                        ann_idx = self._arrow_trace_idx.get((i, j), None)
+                        if ann_idx is not None:
+                            arrow_ann = fig.layout.annotations[ann_idx]
+                            arrow_ann.visible = False
+                        trace.visible = False
+                        continue
+                    if not directed and not m:
+                        trace.visible = False
+                        continue
+                    trace.x = P[:, 0]
+                    trace.y = P[:, 1]
+                    helpers._update_edge_trace(
+                        trace=trace,
+                        edge_weight=w,
+                        color=color,
+                        width=width,
+                        opacity=self.edge_opacity,
+                        label1=labels[i],
+                        label2=labels[j]
+                    )
 
             # UPDATE COLOR BAR (MAKE THIS FUNCTION)
             helpers._update_colorbar(fig, self._colorbar_trace_idx, colorscale, zmin, zmax)
@@ -937,23 +988,55 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         title=None,
     ) -> go.Figure:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
-        ### GET HEAD, NOSE, NODES (NODES MAY NEED TO BE SEPARATED) 
         fig = go.Figure()
         self._build_base_trace(fig=fig, brain_mesh=brain_mesh)
-        # The node trace is always the *last* one in base:
-        
 
-        ### CREATE EDGES
-        self._build_edge_traces(C=C, labels=labels,
-            directed=directed, color_scale_info=color_scale_info, fig=fig
-        )
+        # Vectorized edge creation
+        n_nodes = C.shape[0]
+        ij_iter = list(helpers._get_ij_iter(n_nodes, directed))
+        if ij_iter:
+            i_arr = np.array([i for i, j in ij_iter])
+            j_arr = np.array([j for i, j in ij_iter])
+            w_arr = C[i_arr, j_arr]
+            color_arr = [helpers._get_edge_color(
+                edge_weight=w,
+                zmin=zmin,
+                zmax=zmax,
+                colorscale=colorscale,
+                default_neg_color=self.default_neg_color,
+                default_pos_color=self.default_pos_color
+            ) for w in w_arr]
+            width_arr = [helpers._get_edge_width(
+                edge_weight=w,
+                scale=scale,
+                width_range=self.edge_width_range
+            ) for w in w_arr]
+            P_arr = [self._get_edge_path(i, j, C) for i, j in zip(i_arr, j_arr)]
+            for i, j, w, color, width, P in zip(i_arr, j_arr, w_arr, color_arr, width_arr, P_arr):
+                edge_trace = go.Scatter3d(
+                    x=P[:, 0], y=P[:, 1], z=P[:, 2],
+                    mode="lines",
+                    line=dict(color=color, width=width),
+                    opacity=self.edge_opacity,
+                    showlegend=False,
+                    hoverinfo="text",
+                    text=f"{labels[i]} → {labels[j]}<br>Weight: {w:.3f}",
+                    name=f"{labels[i]},{labels[j]}"
+                )
+                fig.add_trace(edge_trace)
+                self._edge_trace_idx[(i, j)] = len(fig.data) - 1
+                if directed:
+                    arrow = self._collect_arrow(P, w)
+                    if arrow:
+                        pos, vec = arrow
+                        arrow_trace = self._build_arrowhead_trace([pos], [vec], [width], color_scale_info)
+                        if arrow_trace:
+                            fig.add_trace(arrow_trace)
+                            self._arrow_trace_idx[(i, j)] = len(fig.data) - 1
+
         self._build_node_trace(fig=fig, labels=labels)
-
-        ### CREATE COLOR BAR
-        colorbar_trace_idx = helpers._add_colorbar_trace(fig=fig, colorscale=colorscale,zmin=zmin,zmax=zmax, viz_type=VizType.FIG3D)
+        colorbar_trace_idx = helpers._add_colorbar_trace(fig=fig, colorscale=colorscale, zmin=zmin, zmax=zmax, viz_type=VizType.FIG3D)
         self._colorbar_trace_idx = colorbar_trace_idx
-
-        ### ADD REST OF LAYOUT
         fig.update_layout(
             scene=dict(
                 xaxis=dict(visible=False),
@@ -1027,44 +1110,58 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                     # opacity=self.node_opacity
                 )
 
-            traces_list = helpers._get_candidate_edges(edge_trace_idx=self._edge_trace_idx, old_thresh_mask=old_thresh_mask, new_thresh_mask=new_thresh_mask, update_type=update_type, directed=directed, n_nodes=C.shape[0])
-            
-            for (i, j), idx in traces_list:
-                
-                ### GET EDGE's CONN and MASK (BOOL)
-                w = C[i, j]
-                m = new_thresh_mask[i, j]
+            traces_list = helpers._get_candidate_edges(
+                edge_trace_idx=self._edge_trace_idx,
+                old_thresh_mask=old_thresh_mask,
+                new_thresh_mask=new_thresh_mask,
+                update_type=update_type,
+                directed=directed,
+                n_nodes=C.shape[0]
+            )
+            if traces_list:
+                idx_arr = np.array([idx for (_, _), idx in traces_list])
+                ij_arr = np.array([ij for (ij, _ ) in traces_list])
+                i_arr, j_arr = ij_arr[:,0], ij_arr[:,1]
+                w_arr = C[i_arr, j_arr]
+                m_arr = new_thresh_mask[i_arr, j_arr]
 
-                ### TRIED GETTING RID OF CHECK OF IDX
-                # if idx is None:
-                #     continue  # should not happen if build/setup is consistent
+                color_arr = [helpers._get_edge_color(
+                    edge_weight=w,
+                    zmin=zmin,
+                    zmax=zmax,
+                    colorscale=colorscale,
+                    default_neg_color=self.default_neg_color,
+                    default_pos_color=self.default_pos_color
+                ) for w in w_arr]
+                width_arr = [helpers._get_edge_width(
+                    edge_weight=w,
+                    scale=scale,
+                    width_range=self.edge_width_range
+                ) for w in w_arr]
+                P_arr = [self._get_edge_path(i, j, C) for i, j in zip(i_arr, j_arr)]
 
-                ### GET TRACE
-                trace = fig.data[idx]
-                
-                ### HIDE IF MASK == FALSE
-                if directed and not m:
-                    arrow_idx = self._arrow_trace_idx[(i, j)]
-                    arrow_trace = fig.data[arrow_idx]
-                    arrow_trace.visible = False  # fully hide
-                if not m:
-                    # trace.opacity = 0.0
-                    # trace.hoverinfo = "skip"
-                    # trace.text = ""
-                    trace.visible = False  # fully hide
-                    continue
-
-                ### GET COLOR
-                color = helpers._get_edge_color(edge_weight=w, zmin=zmin, zmax=zmax, colorscale=colorscale, default_neg_color=self.default_neg_color, default_pos_color=self.default_pos_color)
-
-                ### GET WIDTH
-                width = helpers._get_edge_width(edge_weight=w, scale=scale, width_range=self.edge_width_range)
-                P = self._get_edge_path(i, j, C)
-                trace.x=P[:,0]
-                trace.y=P[:,1]
-                trace.z=P[:,2]
-                ### UPDATE TRACE FOR VISIBLE EDGES. NEED TO FIX OPACITY FOR 2D, LET'S MAKE THIS AN UPDATEABLE VALUE
-                helpers._update_edge_trace(trace, w, color, width, self.edge_opacity, labels[i], labels[j])
+                for idx, i, j, w, m, color, width, P in zip(idx_arr, i_arr, j_arr, w_arr, m_arr, color_arr, width_arr, P_arr):
+                    trace = fig.data[idx]
+                    if directed and not m:
+                        arrow_idx = self._arrow_trace_idx.get((i, j), None)
+                        if arrow_idx is not None:
+                            arrow_trace = fig.data[arrow_idx]
+                            arrow_trace.visible = False
+                    if not m:
+                        trace.visible = False
+                        continue
+                    trace.x = P[:, 0]
+                    trace.y = P[:, 1]
+                    trace.z = P[:, 2]
+                    helpers._update_edge_trace(
+                        trace,
+                        w,
+                        color,
+                        width,
+                        self.edge_opacity,
+                        labels[i],
+                        labels[j]
+                    )
 
             # UPDATE COLOR BAR (MAKE THIS FUNCTION)
             helpers._update_colorbar(fig, self._colorbar_trace_idx, colorscale, zmin, zmax)
