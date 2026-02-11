@@ -1,3 +1,40 @@
+def create_graph_controls():
+    """Graph Controls UI: slider, radio buttons, community button, legend."""
+    shade_slider = create_slider(
+        id="graph-shade-top-x-slider",
+        data_min=1,
+        data_max=20,
+        step=1,
+        label="Shades top x for metric",
+        default=5,
+    )
+    metric_radio = dbc.RadioItems(
+        id="graph-metric-radio",
+        options=[
+            {"label": "In Degree", "value": "in_degree"},
+            {"label": "Out Degree", "value": "out_degree"},
+            {"label": "Bidirectional Degree", "value": "bidirectional"},
+            {"label": "Node Connection Strength", "value": "node_connection_strengths"},
+        ],
+        value="in_degree",
+        inline=False,
+        className="mb-2",
+    )
+    community_btn = dbc.Button(
+        "Community Partition",
+        id="graph-community-btn",
+        color="info",
+        className="mb-2",
+        n_clicks=0,
+    )
+    legend = html.Div(id="graph-legend", className="mt-2")
+    return html.Div([
+        html.H5("Graph Controls", className="mb-2"),
+        shade_slider,
+        metric_radio,
+        community_btn,
+        legend,
+    ], className="bg-light p-3 rounded shadow-sm mb-3")
 from dash import html, dcc
 import dash_bootstrap_components as dbc
 from dataclasses import dataclass
@@ -724,24 +761,52 @@ def create_stat_component():
                     dbc.CardBody(
                         [
                             html.H5("Network Statistics", className="card-title mb-3"),
-                            html.Div(
-                                [
-                                    html.Div([
-                                        html.Div("Total Nodes:", className="fw-bold me-2"),
-                                        html.Div(id="stat-collapse-total_nodes-container")
-                                    ], className="d-flex justify-content-between"),
-                                    html.Hr(className="my-2"),
-                                    html.Div([
-                                        html.Div("Total Edges:", className="fw-bold me-2"),
-                                        html.Div(id="stat-collapse-total_edges-container")
-                                    ], className="d-flex justify-content-between"),
-                                    html.Hr(className="my-2"),
-                                    html.Div([
-                                        html.Div("Visible Edges:", className="fw-bold me-2"),
-                                        html.Div(id="stat-collapse-visible_edges-container")
-                                    ], className="d-flex justify-content-between"),
-                                ],
-                            ),
+                            html.Div([
+                                html.Div([
+                                    html.Div("Total Nodes:", className="fw-bold me-2"),
+                                    html.Div(id="stat-collapse-total_nodes-container")
+                                ], className="d-flex justify-content-between"),
+                                html.Hr(className="my-2"),
+                                html.Div([
+                                    html.Div("Total Edges:", className="fw-bold me-2"),
+                                    html.Div(id="stat-collapse-total_edges-container")
+                                ], className="d-flex justify-content-between"),
+                                html.Hr(className="my-2"),
+                                html.Div([
+                                    html.Div("Visible Edges:", className="fw-bold me-2"),
+                                    html.Div(id="stat-collapse-visible_edges-container")
+                                ], className="d-flex justify-content-between"),
+                                html.Hr(className="my-2"),
+                                html.Div([
+                                    html.Div("Connection Density:", className="fw-bold me-2"),
+                                    html.Div(id="stat-collapse-conn_density-container")
+                                ], className="d-flex justify-content-between"),
+                                html.Hr(className="my-2"),
+                                html.Div([
+                                    html.Div("Global Efficiency:", className="fw-bold me-2"),
+                                    html.Div(id="stat-collapse-global_efficiency-container")
+                                ], className="d-flex justify-content-between"),
+                                html.Hr(className="my-2"),
+                                html.Div([
+                                    html.Div("Local Efficiency:", className="fw-bold me-2"),
+                                    html.Div(id="stat-collapse-local_efficiency-container")
+                                ], className="d-flex justify-content-between"),
+                                html.Hr(className="my-2"),
+                                html.Div([
+                                    html.Div("Modularity:", className="fw-bold me-2"),
+                                    html.Div(id="stat-collapse-modularity-container")
+                                ], className="d-flex justify-content-between"),
+                                html.Hr(className="my-2"),
+                                html.Div([
+                                    html.Div("Top Node Degrees:", className="fw-bold me-2"),
+                                    html.Div(id="stat-collapse-top_node_degrees-container")
+                                ], className="d-flex justify-content-between"),
+                                html.Hr(className="my-2"),
+                                html.Div([
+                                    html.Div("Top Node Strengths:", className="fw-bold me-2"),
+                                    html.Div(id="stat-collapse-top_node_strengths-container")
+                                ], className="d-flex justify-content-between"),
+                            ]),
                         ],
                     ),
                 ),

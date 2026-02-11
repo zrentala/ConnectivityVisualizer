@@ -14,6 +14,8 @@ def create_layout():
     # stat_component = create_stat_component()
     initial_fig = None
 
+    from interaction.ui_controls import create_graph_controls
+    graph_controls = create_graph_controls()
     left = html.Div(
         [
             html.H4("Data Controls"),
@@ -22,7 +24,8 @@ def create_layout():
             viz_controls,
             html.H4("Threshold Controls"),
             threshold_comp,
-            # html.H4("Graph Controls"),
+            html.H4("Graph Controls"),
+            graph_controls,
         ],
         className="bg-light p-3 rounded shadow-sm",
         style={"height": "100%", "overflowY": "auto"},
