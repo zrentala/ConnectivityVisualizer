@@ -1,6 +1,6 @@
 import numpy as np
 import networkx as nx
-import community as community_louvain  # python-louvain
+import community.community_louvain as community_louvain  # python-louvain
 
 def get_weight_matrix(conn_mat: np.ndarray, mat_idx=0, agg=None) -> np.ndarray:
     """
@@ -141,6 +141,9 @@ def local_efficiency(G: nx.Graph) -> float:
 
 def modularity(G: nx.Graph, directed=False):
     G_und = G.to_undirected() if directed else G
+    if G_und.number_of_edges() == 0:
+        # No edges: modularity is undefined, return 0.0 and empty partition
+        return 0.0, {}
     part = community_louvain.best_partition(G_und, weight="weight")
 
     comms = {}

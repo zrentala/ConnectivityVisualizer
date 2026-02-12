@@ -255,17 +255,6 @@ class ConnectivityViewHeatmap(ConnectivityView):
 
 
 class ConnectivityView2D(ConnectivityView, HandlesNodes):
-        def set_node_colors(self, node_color_map: dict, labels):
-            """
-            Set node colors for the current node trace based on a mapping {label: color}.
-            Used for graph controls (metric/community shading).
-            """
-            if self.fig is None or self._node_trace_idx is None:
-                return
-            node_trace = self.fig.data[self._node_trace_idx]
-            # Map label order to color
-            colors = [node_color_map.get(l, self.node_fill) for l in labels]
-            node_trace.marker.color = colors
 
     def __init__(
         self,
@@ -292,6 +281,19 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             node_edge=node_edge,
         )
        
+    def set_node_colors(self, node_color_map: dict, labels):
+        """
+        Set node colors for the current node trace based on a mapping {label: color}.
+        Used for graph controls (metric/community shading).
+        """
+        if self.fig is None or self._node_trace_idx is None:
+            return
+        node_trace = self.fig.data[self._node_trace_idx]
+        # Map label order to color
+        colors = [node_color_map.get(l, self.node_fill) for l in labels]
+        node_trace.marker.color = colors
+
+
     def update_attributes(self, viz_updates):
         HandlesNodes.update_attribute(self, viz_updates)
 
@@ -653,17 +655,6 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
 
 
 class ConnectivityView3D(ConnectivityView, HandlesNodes):
-        def set_node_colors(self, node_color_map: dict, labels):
-            """
-            Set node colors for the current node trace based on a mapping {label: color}.
-            Used for graph controls (metric/community shading).
-            """
-            if self.fig is None or self._node_trace_idx is None:
-                return
-            node_trace = self.fig.data[self._node_trace_idx]
-            # Map label order to color
-            colors = [node_color_map.get(l, self.node_fill) for l in labels]
-            node_trace.marker.color = colors
     def __init__(
         self,
         chanlocs,
@@ -698,6 +689,18 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         self.brain_mesh_opacity = brain_mesh_opacity
         self._mesh_trace_idx = {}
        
+    def set_node_colors(self, node_color_map: dict, labels):
+        """
+        Set node colors for the current node trace based on a mapping {label: color}.
+        Used for graph controls (metric/community shading).
+        """
+        if self.fig is None or self._node_trace_idx is None:
+            return
+        node_trace = self.fig.data[self._node_trace_idx]
+        # Map label order to color
+        colors = [node_color_map.get(l, self.node_fill) for l in labels]
+        node_trace.marker.color = colors
+
     def update_locs(self, chanlocs):
            # Parse → sx, sy, sz, labels
         sx, sy, sz, labs = helpers.parse_channel_locs(chanlocs)

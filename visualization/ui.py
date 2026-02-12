@@ -14,7 +14,7 @@ def create_layout():
     # stat_component = create_stat_component()
     initial_fig = None
 
-        from interaction.ui_controls import create_graph_controls
+    from interaction.ui_controls import create_graph_controls
     graph_controls = create_graph_controls()
     left = html.Div(
         [

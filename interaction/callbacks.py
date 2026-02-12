@@ -1,8 +1,8 @@
 from analysis.graph import (
-    connection_density, global_efficiency, local_efficiency, modularity,
+    GraphAnalysis, connection_density, global_efficiency, local_efficiency, modularity,
     node_in_out_bidirectional_counts, node_connection_strengths
 )
-from dash import Input, Output, State, Dash, no_update, callback_context
+from dash import Input, Output, State, Dash, no_update, callback_context, html
 import numpy as np
 import plotly.graph_objects as go
 import plotly.colors as plc
@@ -15,11 +15,7 @@ from visualization.vizhelpers import UpdateType
 from utils.global_app_state import GlobalAppState
 from utils.update import update_attributes
 from analysis.threshold import Threshold
-
-# NEW:
-from data.simulation import Simulation
-from utils.braindata import BrainData
-import pandas as pd
+from analysis.graph import GraphAnalysis
 
 def determine_update_type_from_trigger(trigger_id: str) -> UpdateType:
 
@@ -70,172 +66,53 @@ def determine_update_type_from_trigger(trigger_id: str) -> UpdateType:
 
 def register_visualization_callback(app: Dash, global_state: GlobalAppState):
     @app.callback(
-        Output("split-right-fig", "figure"),
-
-        Input("data-conn_idx-slider", "value"),
-
-        # threshold type dropdown (Basic / MST / Statistical Test)
-        Input("thresh-thresh_type-dropdown", "value"),
-        Input("thresh-stat-alpha-slider", "value"),
-        Input("thresh-percent-slider", "value"),
-
-        # numeric threshold slider (percent)
-        Input("viz-fig_type-dropdown", "value"),
-        Input("viz-color_type-dropdown", "value"),
-        Input("viz-color-range_slider", "value"),
-
-        # 2D visualization options
-        Input("viz-node-node_size-slider", "value"),
-        # Input("viz-node-node_opacity-slider", "value"),
-        Input("viz-node-edge_width-range_slider", "value"),
-        Input("viz-node-edge_opacity-slider", "value"),
-        Input("viz-node-arc_radius-slider", "value"),
-
-        Input("viz-3d-show_right_hem-checklist", "value"),
-        Input("viz-3d-show_left_hem-checklist", "value"),
-        Input("viz-3d-brain_mesh_opacity-slider", "value"),
-        prevent_initial_call=False,
-    )
-
-    def update_visualization(conn_idx, 
-                             
-                            thresh_type, 
-                            thresh_alpha,
-                            thresh_percent, 
-
-                            viz_fig_type,
-                            color_type, 
-                            color_range,
-                               
-                             node_size, 
-                            # node_opacity, 
-                             edge_width_range, 
-                             edge_opacity, 
-                             arc_radius,
-                             show_hemi_right_3d, 
-                             show_hemi_left_3d,
-                             brain_mesh_opacity):
-
-        """Update the main visualization figure.
-
-        The signature must match the decorated Inputs exactly.
-        """
-        if global_state.brain_data is None or global_state.viz is None:
-            return go.Figure()  # empty placeholder
-
-        n_frames = global_state.brain_data.conn_mat.shape[0]
-
-        conn_idx = int(np.clip(conn_idx or 0, 0, n_frames - 1))
-        viz_type = helpers.str_to_viz_type(viz_fig_type)
-
-        # conn_range is expected to be a two-element sequence [min, max]
-        try:
-            color_min, color_max = float(color_range[0]), float(color_range[1])
-        except Exception:
-            color_min, color_max = 0.0, 1.0
-
-
-        # -----------------------------
-        # Build update flags
-        # -----------------------------
-        viz_updates = {
-            "conn_idx": conn_idx,
-            "colorscale": color_type,
-            "color_min": color_min,
-            "color_max": color_max,
-            # "update_xyz": global_state.brain_data.chanlocs,
-            "viz_type": viz_type,
-            "node_size": node_size,
-            # "node_opacity": node_opacity,
-            "edge_width_range": edge_width_range,
-            "edge_opacity": edge_opacity,
-            "arc_radius": arc_radius,
-
-            "show_hemi_left_3d": bool(show_hemi_left_3d and len(show_hemi_left_3d) > 0),
-            "show_hemi_right_3d": bool(show_hemi_right_3d and len(show_hemi_right_3d) > 0),
-            "brain_mesh_opacity_3d": brain_mesh_opacity,
-        }
-
-        threshold_updates = {
-            "threshold_type": thresh_type,
-            "threshold": thresh_percent,
-            "alpha": thresh_alpha,
-        }
-
-        # -----------------------------
-        # Determine update type
-        # -----------------------------
-        trigger = callback_context.triggered[0]["prop_id"].split(".")[0]
-        update_type = determine_update_type_from_trigger(trigger)
-        print("update_type:", update_type)
-
-        # -----------------------------
-        # Run the visualization update
-        # -----------------------------
-        # switch_fig = global_state.viz.viz_type != viz_updates['viz_type']
-        # print(f"{switch_fig=}")
-        update_attributes(global_state.threshold, **threshold_updates)
-        global_state.viz.update_attributes(viz_updates=viz_updates)
-        global_state.viz.update_figure(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type)
-        # if switch_fig and global_state.viz.viz_dict[ global_state.viz.viz_type] is None:
-        #     global_state.viz.build_figure(brain_data=global_state.brain_data, threshold=global_state.threshold)
-        # else:
-        #     global_state.viz.update_figure(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type)
-        fig = global_state.viz.get_figure()
-        fig.update_layout(uirevision="keep")
-        return fig
-    
-    @app.callback(
         Output("stat-collapse-total_nodes-container", "children"),
         Output("stat-collapse-total_edges-container", "children"),
         Output("stat-collapse-visible_edges-container", "children"),
-
-        # Trigger whenever visualization updates
+        Output("stat-collapse-conn_density-container", "children"),
+        Output("stat-collapse-global_efficiency-container", "children"),
+        Output("stat-collapse-local_efficiency-container", "children"),
+        Output("stat-collapse-modularity-container", "children"),
+        Output("stat-collapse-top_node_degrees-container", "children"),
+        Output("stat-collapse-top_node_strengths-container", "children"),
         Input("split-right-fig", "figure"),
+        prevent_initial_call=False,
     )
     def update_stats(_):
         if global_state.viz is None or global_state.brain_data is None:
-            return 0,0,0
-        mask = global_state.viz._mask_cache
-        np.fill_diagonal(mask, False)
-        n_nodes = global_state.brain_data.n_nodes
-        # Total edges
-        if global_state.brain_data.directed:
-            total_edges = n_nodes * (n_nodes - 1)
-        else:
-            total_edges = n_nodes * (n_nodes - 1) // 2
+            return 0, 0, 0, "", "", "", "", "", ""
+        # Use GraphAnalysis backend
+        conn_idx = global_state.viz.conn_idx if hasattr(global_state.viz, 'conn_idx') else 0
+        threshold = getattr(global_state.threshold, 'threshold', None)
+        ga = GraphAnalysis(
+            global_state.brain_data.conn_mat,
+            global_state.brain_data.labels,
+            global_state.brain_data.directed,
+            mat_idx=conn_idx,
+            threshold=threshold,
+        )
+        G = ga.graph
+        n_nodes = G.number_of_nodes()
+        total_edges = G.number_of_edges()
+        # Visible edges: count nonzero edges in mask
         mask = global_state.viz._mask_cache.copy()
         np.fill_diagonal(mask, False)
         if global_state.brain_data.directed:
             visible_edges = int(mask.sum())
         else:
             visible_edges = int(np.triu(mask, k=1).sum())
-
-        # --- Graph metrics ---
-        G = global_state.viz._graph_cache if hasattr(global_state.viz, '_graph_cache') else None
-        if G is None:
-            from analysis.graph import GraphAnalysis
-            ga = GraphAnalysis(global_state.brain_data.conn_mat, global_state.brain_data.labels, global_state.brain_data.directed)
-            G = ga.graph
         dens = connection_density(G)
         g_eff = global_efficiency(G)
         l_eff = local_efficiency(G)
-        mod, part = modularity(G, directed=global_state.brain_data.directed)
-        node_counts = node_in_out_bidirectional_counts(G, global_state.brain_data.directed)
-        node_strengths = node_connection_strengths(G, global_state.brain_data.directed)
-
-        # Top node degrees/strengths (show top 3)
+        mod, part = modularity(G)
+        node_counts =   node_in_out_bidirectional_counts(G, global_state.brain_data.directed)
+        node_strengths =   node_connection_strengths(G, global_state.brain_data.directed)
         in_deg = sorted(node_counts.items(), key=lambda x: x[1]['in_degree'], reverse=True)[:3]
-        out_deg = sorted(node_counts.items(), key=lambda x: x[1]['out_degree'], reverse=True)[:3]
-        bi_deg = sorted(node_counts.items(), key=lambda x: x[1]['bidirectional'], reverse=True)[:3]
         ncs = sorted(node_strengths.items(), key=lambda x: x[1]['in_strength']+x[1]['out_strength'], reverse=True)[:3]
-
-        # Format for display
         def fmt_top(lst, key):
             return ', '.join([f"{n} ({v[key]})" for n, v in lst])
         def fmt_ncs(lst):
             return ', '.join([f"{n} ({v['in_strength']+v['out_strength']:.2f})" for n, v in lst])
-
         return (
             n_nodes,
             total_edges,
@@ -247,102 +124,165 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
             fmt_top(in_deg, 'in_degree'),
             fmt_ncs(ncs),
         )
-
-# --- Graph Controls and Node Shading Callback ---
-from dash.dependencies import Output, Input, State
-@app.callback(
-    Output("split-right-fig", "figure"),
-    Output("graph-legend", "children"),
-    Input("graph-metric-radio", "value"),
-    Input("graph-shade-top-x-slider", "value"),
-    Input("graph-community-btn", "n_clicks"),
-    State("split-right-fig", "figure"),
-)
-def update_graph_controls(metric, top_x, community_clicks, fig):
-    if global_state.viz is None or global_state.brain_data is None:
-        return fig, ""
-    from analysis.graph import GraphAnalysis, node_in_out_bidirectional_counts, node_connection_strengths, modularity
-    ga = GraphAnalysis(global_state.brain_data.conn_mat, global_state.brain_data.labels, global_state.brain_data.directed)
-    G = ga.graph
-    node_counts = node_in_out_bidirectional_counts(G, global_state.brain_data.directed)
-    node_strengths = node_connection_strengths(G, global_state.brain_data.directed)
-    node_colors = {}
-    legend = []
-    ctx = callback_context
-    triggered = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
-    labels = global_state.brain_data.labels
-    if triggered == "graph-community-btn" and community_clicks:
-        mod, part = modularity(G, directed=global_state.brain_data.directed)
-        comms = {}
-        for node, cid in part.items():
-            comms.setdefault(cid, []).append(node)
-        color_map = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33", "#a65628", "#f781bf", "#999999"]
-        for i, (cid, nodes) in enumerate(comms.items()):
-            color = color_map[i % len(color_map)]
-            for n in nodes:
-                node_colors[n] = color
-            legend.append(html.Div([html.Span(style={"backgroundColor": color, "display": "inline-block", "width": "1em", "height": "1em", "marginRight": "0.5em"}), f"Community {cid} ({len(nodes)})"]))
-    else:
-        # Metric-based shading
-        if metric == "in_degree":
-            values = {n: v["in_degree"] for n, v in node_counts.items()}
-        elif metric == "out_degree":
-            values = {n: v["out_degree"] for n, v in node_counts.items()}
-        elif metric == "bidirectional":
-            values = {n: v["bidirectional"] for n, v in node_counts.items()}
-        elif metric == "node_connection_strengths":
-            values = {n: v["in_strength"] + v["out_strength"] for n, v in node_strengths.items()}
-        else:
-            values = {n: 0 for n in node_counts}
-        top_nodes = sorted(values, key=values.get, reverse=True)[:top_x]
-        highlight_color = "#FFD700"
-        for n in top_nodes:
-            node_colors[n] = highlight_color
-        legend.append(html.Div([html.Span(style={"backgroundColor": highlight_color, "display": "inline-block", "width": "1em", "height": "1em", "marginRight": "0.5em"}), f"Top {top_x} nodes by {metric.replace('_',' ')}"]))
-
-    # Use the new set_node_colors method for node shading
-    if hasattr(global_state.viz, "set_node_colors"):
-        global_state.viz.set_node_colors(node_colors, labels)
-        fig_obj = global_state.viz.fig
-    else:
-        import plotly.graph_objs as go
-        fig_obj = go.Figure(fig)
-    return fig_obj, legend
-
-def update_loc_options(sd):
-    print("Updating loc options with sd:", sd)
-    # No FC loaded yet → no options
-    if sd is None or "n_elec" not in sd:
-        return [{"label": "No available presets", "value": "none", "disabled": True}]
-
-    n = sd["n_elec"]
-    presets = PRESET_LOCS_REVERSED.get(n)
-
-    # If nothing matches → disabled placeholder
-    if not presets:
-        return [{"label": "No available presets", "value": "none", "disabled": True}]
-
-    # Normal case → real selectable options
-    return [{"label": name, "value": name} for name in presets]
-
-def update_fc_options():
-    presets = PRESET_CONFIGS
-
-    # Nothing matches → disabled placeholder
-    if not presets:
-        return [{"label": "No available presets", "value": "none", "disabled": True}]
-
-    # Normal case → real options
-    return [
-        {
-            "label": key,
-            "value": f"{key} (n={value['n_elec']}, mats={value['n_mat']})"
+    @app.callback(
+        Output("split-right-fig", "figure"),
+        Output("graph-legend", "children"),
+        Input("data-conn_idx-slider", "value"),
+        Input("thresh-thresh_type-dropdown", "value"),
+        Input("thresh-stat-alpha-slider", "value"),
+        Input("thresh-percent-slider", "value"),
+        Input("viz-fig_type-dropdown", "value"),
+        Input("viz-color_type-dropdown", "value"),
+        Input("viz-color-range_slider", "value"),
+        Input("viz-node-node_size-slider", "value"),
+        Input("viz-node-edge_width-range_slider", "value"),
+        Input("viz-node-edge_opacity-slider", "value"),
+        Input("viz-node-arc_radius-slider", "value"),
+        Input("viz-3d-show_right_hem-checklist", "value"),
+        Input("viz-3d-show_left_hem-checklist", "value"),
+        Input("viz-3d-brain_mesh_opacity-slider", "value"),
+        Input("graph-metric-radio", "value"),
+        Input("graph-shade-top-x-slider", "value"),
+        Input("graph-community-btn", "n_clicks"),
+        State("split-right-fig", "figure"),
+        prevent_initial_call=False,
+    )
+    def update_visualization_and_graph_controls(
+        conn_idx,
+        thresh_type,
+        thresh_alpha,
+        thresh_percent,
+        viz_fig_type,
+        color_type,
+        color_range,
+        node_size,
+        edge_width_range,
+        edge_opacity,
+        arc_radius,
+        show_hemi_right_3d,
+        show_hemi_left_3d,
+        brain_mesh_opacity,
+        metric,
+        top_x,
+        community_clicks,
+        fig
+    ):
+        if global_state.brain_data is None or global_state.viz is None:
+            return go.Figure(), ""
+        n_frames = global_state.brain_data.conn_mat.shape[0]
+        conn_idx = int(np.clip(conn_idx or 0, 0, n_frames - 1))
+        viz_type = helpers.str_to_viz_type(viz_fig_type)
+        try:
+            color_min, color_max = float(color_range[0]), float(color_range[1])
+        except Exception:
+            color_min, color_max = 0.0, 1.0
+        viz_updates = {
+            "conn_idx": conn_idx,
+            "colorscale": color_type,
+            "color_min": color_min,
+            "color_max": color_max,
+            "viz_type": viz_type,
+            "node_size": node_size,
+            "edge_width_range": edge_width_range,
+            "edge_opacity": edge_opacity,
+            "arc_radius": arc_radius,
+            "show_hemi_left_3d": bool(show_hemi_left_3d and len(show_hemi_left_3d) > 0),
+            "show_hemi_right_3d": bool(show_hemi_right_3d and len(show_hemi_right_3d) > 0),
+            "brain_mesh_opacity_3d": brain_mesh_opacity,
         }
-        for key, value in presets.items()
-    ]
+        threshold_updates = {
+            "threshold_type": thresh_type,
+            "threshold": thresh_percent,
+            "alpha": thresh_alpha,
+        }
+        trigger = callback_context.triggered[0]["prop_id"].split(".")[0]
+        update_type = determine_update_type_from_trigger(trigger)
+        update_attributes(global_state.threshold, **threshold_updates)
+        global_state.viz.update_attributes(viz_updates=viz_updates)
+        global_state.viz.update_figure(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type)
+        fig_obj = global_state.viz.get_figure()
+        labels = global_state.brain_data.labels
+        # from analysis.graph import GraphAnalysis, node_in_out_bidirectional_counts, node_connection_strengths, modularity
+        ga = GraphAnalysis(global_state.brain_data.conn_mat, labels, global_state.brain_data.directed)
+        G = ga.graph
+        node_counts = node_in_out_bidirectional_counts(G, global_state.brain_data.directed)
+        node_strengths = node_connection_strengths(G, global_state.brain_data.directed)
+        node_colors = {}
+        legend = []
+        ctx = callback_context
+        triggered = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
+        if triggered == "graph-community-btn" and community_clicks:
+            mod, part = modularity(G, directed=global_state.brain_data.directed)
+            comms = {}
+            for node, cid in part.items():
+                comms.setdefault(cid, []).append(node)
+            color_map = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33", "#a65628", "#f781bf", "#999999"]
+            for i, (cid, nodes) in enumerate(comms.items()):
+                color = color_map[i % len(color_map)]
+                for n in nodes:
+                    node_colors[n] = color
+                legend.append(html.Div([
+                    html.Span(style={"backgroundColor": color, "display": "inline-block", "width": "1em", "height": "1em", "marginRight": "0.5em"}),
+                    f"Community {cid} ({len(nodes)})"
+                ]))
+        else:
+            if metric == "in_degree":
+                values = {n: v["in_degree"] for n, v in node_counts.items()}
+            elif metric == "out_degree":
+                values = {n: v["out_degree"] for n, v in node_counts.items()}
+            elif metric == "bidirectional":
+                values = {n: v["bidirectional"] for n, v in node_counts.items()}
+            elif metric == "node_connection_strengths":
+                values = {n: v["in_strength"] + v["out_strength"] for n, v in node_strengths.items()}
+            else:
+                values = {n: 0 for n in node_counts}
+            top_nodes = sorted(values, key=values.get, reverse=True)[:top_x]
+            highlight_color = "#FFD700"
+            for n in top_nodes:
+                node_colors[n] = highlight_color
+            legend.append(html.Div([
+                html.Span(style={"backgroundColor": highlight_color, "display": "inline-block", "width": "1em", "height": "1em", "marginRight": "0.5em"}),
+                f"Top {top_x} nodes by {metric.replace('_',' ')}"
+            ]))
+        if hasattr(global_state.viz, "set_node_colors"):
+            global_state.viz.set_node_colors(node_colors, labels)
+            fig_obj = global_state.viz.fig
+        return fig_obj, legend
+
+    def update_loc_options(sd):
+        print("Updating loc options with sd:", sd)
+        # No FC loaded yet → no options
+        if sd is None or "n_elec" not in sd:
+            return [{"label": "No available presets", "value": "none", "disabled": True}]
+
+        n = sd["n_elec"]
+        presets = PRESET_LOCS_REVERSED.get(n)
+
+        # If nothing matches → disabled placeholder
+        if not presets:
+            return [{"label": "No available presets", "value": "none", "disabled": True}]
+
+        # Normal case → real selectable options
+        return [{"label": name, "value": name} for name in presets]
+
+    def update_fc_options():
+        presets = PRESET_CONFIGS
+
+        # Nothing matches → disabled placeholder
+        if not presets:
+            return [{"label": "No available presets", "value": "none", "disabled": True}]
+
+        # Normal case → real options
+        return [
+            {
+                "label": key,
+                "value": f"{key} (n={value['n_elec']}, mats={value['n_mat']})"
+            }
+            for key, value in presets.items()
+        ]
 
 def register_data_callbacks(app: Dash, global_state: GlobalAppState):
-    # print("=== REGISTERING DATA CALLBACKS ===")
+        # print("=== REGISTERING DATA CALLBACKS ===")
     loader = DataLoader()
 
     # IDs
@@ -373,6 +313,47 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
 
     loc_upload_id = "data-loc-upload"
     loc_preset_id = "data-loc-preset-dropdown"
+    # Add collapsible DataLoader UI
+    @app.callback(
+        Output("data-loader-collapse", "is_open"),
+        Output("data-loader-container", "style"),
+        Output("data-loader-toggle-btn", "children"),
+        Output("data-loader-toggle-btn", "style"),
+        Input("data-loader-toggle-btn", "n_clicks"),
+        State("data-loader-collapse", "is_open"),
+        prevent_initial_call=False,
+    )
+    def toggle_data_loader(n, is_open):
+        if n is None:
+            raise PreventUpdate
+        new_open = not is_open
+        if new_open:
+            new_style = {
+                "height": "auto",
+                "overflow": "visible",
+                "transition": "height 0.3s",
+                "borderBottom": "1px solid #ccc",
+                "position": "relative",
+            }
+            arrow = "˄"  # up arrow for collapse
+            button_style = {}
+        else:
+            new_style = {
+                "height": "40px",
+                "overflow": "hidden",
+                "transition": "height 0.3s",
+                "borderBottom": "1px solid #ccc",
+                "position": "relative",
+            }
+            arrow = "˅"  # down arrow for expand
+            button_style = {
+                "position": "absolute",
+                "right": "5px",
+                "top": "5px",
+                "zIndex": 1000,
+            }
+        return new_open, new_style, arrow, button_style
+    
 
     # ---------------------------------------------------
     # MODE SWITCHING CALLBACKS

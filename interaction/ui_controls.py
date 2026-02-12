@@ -715,42 +715,50 @@ def create_data_component() -> html.Div:
     )
 
     # =====================================================================
-    # Main Container
+    # Collapsible DataLoader UI
     # =====================================================================
-
-    return dbc.Container(
-        [
-            # Header with dataset status
-            dbc.Row(
-                [
-                    dbc.Col(
-                        [dbc.Label("Dataset:"), data_label],
-                        width="auto",
-                    )
-                ],
-                className="mb-4",
-            ),
-            # FC Section
-            dbc.Card(
-                dbc.CardBody(fc_section),
-                className="mb-4",
-            ),
-            # Location Section
-            dbc.Card(
-                dbc.CardBody(loc_section),
-                className="mb-4",
-            ),
-            # Submit button
-            submit_button,
-            # Animation slider
-            html.Div(className="mt-4"),
-            animation_slider,
-            # Data store
-            data_store,
-        ],
-        fluid=True,
-        className=container_class,
+    toggle_btn = dbc.Button(
+        "˅",
+        id="data-loader-toggle-btn",
+        color="secondary",
+        size="sm",
+        className="mb-2",
+        n_clicks=0,
+        style={"width": "100%"},
     )
+    return html.Div([
+        toggle_btn,
+        dbc.Collapse(
+            html.Div(
+                id="data-loader-container",
+                children=[
+                    dbc.Container([
+                        # Header with dataset status
+                        dbc.Row([
+                            dbc.Col([
+                                dbc.Label("Dataset:"), data_label
+                            ], width="auto")
+                        ], className="mb-4"),
+                        # FC Section
+                        dbc.Card(dbc.CardBody(fc_section), className="mb-4"),
+                        # Location Section
+                        dbc.Card(dbc.CardBody(loc_section), className="mb-4"),
+                        # Submit button
+                        submit_button,
+                        # Data store
+                        data_store,
+                    ], fluid=True, className=container_class),
+                ]
+            ),
+            id="data-loader-collapse",
+            is_open=True,
+        ),
+        # Connectivity Matrix Index slider OUTSIDE collapse
+        html.Div(
+            animation_slider,
+            className="mt-4 mb-4"
+        ),
+    ], className="mb-4")
 
 
 def create_stat_component():
