@@ -51,7 +51,9 @@ class ConnectivityView(ABC):
         color_scale_info,
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
-        title: Optional[str]
+        title: Optional[str],
+        node_color_map=None,
+        node_fill=None,
     ) -> go.Figure:
         pass
 
@@ -280,19 +282,6 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             node_fill=node_fill,
             node_edge=node_edge,
         )
-       
-    def set_node_colors(self, node_color_map: dict, labels):
-        """
-        Set node colors for the current node trace based on a mapping {label: color}.
-        Used for graph controls (metric/community shading).
-        """
-        if self.fig is None or self._node_trace_idx is None:
-            return
-        node_trace = self.fig.data[self._node_trace_idx]
-        # Map label order to color
-        colors = [node_color_map.get(l, self.node_fill) for l in labels]
-        node_trace.marker.color = colors
-
 
     def update_attributes(self, viz_updates):
         HandlesNodes.update_attribute(self, viz_updates)
@@ -537,6 +526,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         self.fig = fig
         return fig
 
+
     def update_figure(self,
         C: np.ndarray,
         labels, 
@@ -546,12 +536,13 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
         title=None,
+        node_color_map=None,
+        node_fill=None,
     ) -> go.Figure:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
         fig = self.fig
 
         if fig is None:
-            # raise Error
             fig = self.build_figure(
                 C=C,
                 labels=labels,
@@ -560,35 +551,29 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
             )
 
         with fig.batch_update():
-            # print(f"{update_type=}")
             if update_type == UpdateType.NODES:
-
                 node_trace = fig.data[self._node_trace_idx]
-
                 helpers._update_node_trace_all(
                     trace=node_trace,
                     labels=labels,
                     size=self.node_size,
-                    color=self.node_fill,
-                    # opacity=self.node_opacity
+                    node_color_map=node_color_map,
+                    node_fill=self.node_fill if node_fill is None else node_fill,
                 )
-
                 self.fig = fig
                 return fig
-            
+
             if update_type == UpdateType.ALL:
-
                 node_trace = fig.data[self._node_trace_idx]
-
                 helpers._update_node_trace_all(
                     trace=node_trace,
                     labels=labels,
                     size=self.node_size,
-                    color=self.node_fill,
-                    # opacity=self.node_opacity
+                    node_color_map=node_color_map,
+                    node_fill=self.node_fill if node_fill is None else node_fill,
                 )
 
-              # Vectorized edge update
+            # Vectorized edge update
             traces_list = helpers._get_candidate_edges(
                 edge_trace_idx=self._edge_trace_idx,
                 old_thresh_mask=old_thresh_mask,
@@ -598,14 +583,12 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                 n_nodes=C.shape[0]
             )
             if traces_list:
-                # Unpack indices for vectorized access
                 idx_arr = np.array([idx for (_, _), idx in traces_list])
                 ij_arr = np.array([ij for (ij, _ ) in traces_list])
                 i_arr, j_arr = ij_arr[:,0], ij_arr[:,1]
                 w_arr = C[i_arr, j_arr]
                 m_arr = new_thresh_mask[i_arr, j_arr]
 
-                # Cache edge colors and widths
                 color_arr = [helpers._get_edge_color(
                     edge_weight=w,
                     zmin=zmin,
@@ -619,7 +602,6 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                     scale=scale,
                     width_range=self.edge_width_range
                 ) for w in w_arr]
-                # Cache edge paths
                 P_arr = [self._get_edge_path(i, j) for i, j in zip(i_arr, j_arr)]
 
                 for idx, i, j, w, m, color, width, P in zip(idx_arr, i_arr, j_arr, w_arr, m_arr, color_arr, width_arr, P_arr):
@@ -646,10 +628,8 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                         label2=labels[j]
                     )
 
-            # UPDATE COLOR BAR (MAKE THIS FUNCTION)
             helpers._update_colorbar(fig, self._colorbar_trace_idx, colorscale, zmin, zmax)
 
-        # helpers._update_title(fig=fig, title=title)
         self.fig = fig
         return fig
 
@@ -688,18 +668,6 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         self.show_hemi_right = show_hemi_right
         self.brain_mesh_opacity = brain_mesh_opacity
         self._mesh_trace_idx = {}
-       
-    def set_node_colors(self, node_color_map: dict, labels):
-        """
-        Set node colors for the current node trace based on a mapping {label: color}.
-        Used for graph controls (metric/community shading).
-        """
-        if self.fig is None or self._node_trace_idx is None:
-            return
-        node_trace = self.fig.data[self._node_trace_idx]
-        # Map label order to color
-        colors = [node_color_map.get(l, self.node_fill) for l in labels]
-        node_trace.marker.color = colors
 
     def update_locs(self, chanlocs):
            # Parse → sx, sy, sz, labels
@@ -1114,8 +1082,8 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                     trace=node_trace,
                     labels=labels,
                     size=self.node_size * 0.5,
-                    color=self.node_fill,
-                    # opacity=self.node_opacity
+                    node_color_map=node_color_map,
+                    node_fill=self.node_fill if node_fill is None else node_fill,
                 )
 
                 self.fig = fig

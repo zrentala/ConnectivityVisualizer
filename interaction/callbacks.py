@@ -1,7 +1,4 @@
-from analysis.graph import (
-    GraphAnalysis, connection_density, global_efficiency, local_efficiency, modularity,
-    node_in_out_bidirectional_counts, node_connection_strengths
-)
+from analysis.graph import GraphAnalysis
 from dash import Input, Output, State, Dash, no_update, callback_context, html
 import numpy as np
 import plotly.graph_objects as go
@@ -14,8 +11,54 @@ from visualization.vizuimanager import VizType, VizUIManager
 from visualization.vizhelpers import UpdateType
 from utils.global_app_state import GlobalAppState
 from utils.update import update_attributes
-from analysis.threshold import Threshold
+from analysis.threshold import Threshold, compute_load_thresh
 from analysis.graph import GraphAnalysis
+
+def get_metric_values(ga, metric):
+    """
+    Returns a dictionary {node: value} for the selected metric.
+    Safely handles directed / undirected cases.
+    """
+
+    if metric == "in_degree":
+        return {
+            node: vals.get("in_degree", 0)
+            for node, vals in ga.node_degrees.items()
+        }
+
+    elif metric == "out_degree":
+        return {
+            node: vals.get("out_degree", 0)
+            for node, vals in ga.node_degrees.items()
+        }
+
+    elif metric == "bidirectional":
+        return {
+            node: vals.get("bidirectional", 0)
+            for node, vals in ga.node_degrees.items()
+        }
+
+    elif metric == "node_connection_strengths":
+
+        if ga.directed:
+            return {
+                node: vals.get("in_strength", 0) + vals.get("out_strength", 0)
+                for node, vals in ga.node_strengths.items()
+            }
+        else:
+            return {
+                node: vals.get("in_strength", 0)
+                for node, vals in ga.node_strengths.items()
+            }
+
+    # Community handled separately
+    elif metric in ["community", "none"]:
+        return {}
+
+    # Safety fallback
+    return {}
+
+
 
 def determine_update_type_from_trigger(trigger_id: str) -> UpdateType:
 
@@ -32,6 +75,9 @@ def determine_update_type_from_trigger(trigger_id: str) -> UpdateType:
     # Node changes (2D & 3D)
     if trigger_id in {
         "viz-node-node_size-slider",
+        "graph-metric-radio",
+        "graph-shade-top-x-slider",
+        "graph-community-btn"
         #  "viz-node-node_opacity-slider",
     }:
         return UpdateType.NODES
@@ -66,6 +112,20 @@ def determine_update_type_from_trigger(trigger_id: str) -> UpdateType:
 
 def register_visualization_callback(app: Dash, global_state: GlobalAppState):
     @app.callback(
+        Output("graph-shade-top-x-container", "style"),
+        Input("graph-metric-radio", "value"),
+        prevent_initial_call=False,
+    )
+    def toggle_shade_slider(metric):
+
+        # Hide slider for non-degree modes
+        if metric in ["community", "none"]:
+            return {"display": "none"}
+
+        # Show for degree/strength metrics
+        return {"display": "block"}
+    
+    @app.callback(
         Output("stat-collapse-total_nodes-container", "children"),
         Output("stat-collapse-total_edges-container", "children"),
         Output("stat-collapse-visible_edges-container", "children"),
@@ -81,32 +141,36 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
     def update_stats(_):
         if global_state.viz is None or global_state.brain_data is None:
             return 0, 0, 0, "", "", "", "", "", ""
-        # Use GraphAnalysis backend
+        # Always recalculate GraphAnalysis with current threshold and conn_idx
         conn_idx = global_state.viz.conn_idx if hasattr(global_state.viz, 'conn_idx') else 0
         threshold = getattr(global_state.threshold, 'threshold', None)
+        mask = global_state.viz._mask_cache.copy()
+        np.fill_diagonal(mask, False)
         ga = GraphAnalysis(
             global_state.brain_data.conn_mat,
             global_state.brain_data.labels,
             global_state.brain_data.directed,
             mat_idx=conn_idx,
             threshold=threshold,
+            mask=mask,
         )
         G = ga.graph
-        n_nodes = G.number_of_nodes()
-        total_edges = G.number_of_edges()
+        n_nodes = ga.num_nodes
+        total_edges = ga.total_num_edges
+        visible_edges = ga.visible_num_edges
         # Visible edges: count nonzero edges in mask
         mask = global_state.viz._mask_cache.copy()
         np.fill_diagonal(mask, False)
-        if global_state.brain_data.directed:
-            visible_edges = int(mask.sum())
-        else:
-            visible_edges = int(np.triu(mask, k=1).sum())
-        dens = connection_density(G)
-        g_eff = global_efficiency(G)
-        l_eff = local_efficiency(G)
-        mod, part = modularity(G)
-        node_counts =   node_in_out_bidirectional_counts(G, global_state.brain_data.directed)
-        node_strengths =   node_connection_strengths(G, global_state.brain_data.directed)
+        # if global_state.brain_data.directed:
+        #     visible_edges = int(mask.sum())
+        # else:
+        #     visible_edges = int(np.triu(mask, k=1).sum())
+        dens = ga.density
+        g_eff = ga.global_eff
+        l_eff = ga.local_eff
+        mod = ga.modularity
+        node_counts = ga.node_degrees
+        node_strengths = ga.node_strengths
         in_deg = sorted(node_counts.items(), key=lambda x: x[1]['in_degree'], reverse=True)[:3]
         ncs = sorted(node_strengths.items(), key=lambda x: x[1]['in_strength']+x[1]['out_strength'], reverse=True)[:3]
         def fmt_top(lst, key):
@@ -143,7 +207,6 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         Input("viz-3d-brain_mesh_opacity-slider", "value"),
         Input("graph-metric-radio", "value"),
         Input("graph-shade-top-x-slider", "value"),
-        Input("graph-community-btn", "n_clicks"),
         State("split-right-fig", "figure"),
         prevent_initial_call=False,
     )
@@ -164,7 +227,6 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         brain_mesh_opacity,
         metric,
         top_x,
-        community_clicks,
         fig
     ):
         if global_state.brain_data is None or global_state.viz is None:
@@ -199,54 +261,118 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         update_type = determine_update_type_from_trigger(trigger)
         update_attributes(global_state.threshold, **threshold_updates)
         global_state.viz.update_attributes(viz_updates=viz_updates)
-        global_state.viz.update_figure(brain_data=global_state.brain_data, threshold=global_state.threshold, update_type=update_type)
-        fig_obj = global_state.viz.get_figure()
-        labels = global_state.brain_data.labels
-        # from analysis.graph import GraphAnalysis, node_in_out_bidirectional_counts, node_connection_strengths, modularity
-        ga = GraphAnalysis(global_state.brain_data.conn_mat, labels, global_state.brain_data.directed)
+        ga = global_state.graph_analysis
         G = ga.graph
-        node_counts = node_in_out_bidirectional_counts(G, global_state.brain_data.directed)
-        node_strengths = node_connection_strengths(G, global_state.brain_data.directed)
+        node_counts = ga.node_degrees
+        node_strengths = ga.node_strengths
         node_colors = {}
         legend = []
         ctx = callback_context
         triggered = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
-        if triggered == "graph-community-btn" and community_clicks:
-            mod, part = modularity(G, directed=global_state.brain_data.directed)
+        # Set node colors and legend before update_figure
+        values = get_metric_values(ga, metric)
+
+        if metric == "community":
+
+            part = ga.partition
             comms = {}
+
             for node, cid in part.items():
                 comms.setdefault(cid, []).append(node)
-            color_map = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33", "#a65628", "#f781bf", "#999999"]
+
+            color_map = ["#e41a1c", "#377eb8", "#984ea3", "#ff7f00",
+                        "#ffff33", "#a65628", "#f781bf", "#999999"]
+
             for i, (cid, nodes) in enumerate(comms.items()):
                 color = color_map[i % len(color_map)]
+
                 for n in nodes:
                     node_colors[n] = color
+
                 legend.append(html.Div([
-                    html.Span(style={"backgroundColor": color, "display": "inline-block", "width": "1em", "height": "1em", "marginRight": "0.5em"}),
+                    html.Span(
+                        style={
+                            "backgroundColor": color,
+                            "display": "inline-block",
+                            "width": "1em",
+                            "height": "1em",
+                            "marginRight": "0.5em"
+                        }
+                    ),
                     f"Community {cid} ({len(nodes)})"
                 ]))
-        else:
-            if metric == "in_degree":
-                values = {n: v["in_degree"] for n, v in node_counts.items()}
-            elif metric == "out_degree":
-                values = {n: v["out_degree"] for n, v in node_counts.items()}
-            elif metric == "bidirectional":
-                values = {n: v["bidirectional"] for n, v in node_counts.items()}
-            elif metric == "node_connection_strengths":
-                values = {n: v["in_strength"] + v["out_strength"] for n, v in node_strengths.items()}
-            else:
-                values = {n: 0 for n in node_counts}
+
+        elif metric == "none":
+
+            node_colors = {}
+
+        elif values:
+
             top_nodes = sorted(values, key=values.get, reverse=True)[:top_x]
+
             highlight_color = "#FFD700"
+
             for n in top_nodes:
                 node_colors[n] = highlight_color
+
             legend.append(html.Div([
-                html.Span(style={"backgroundColor": highlight_color, "display": "inline-block", "width": "1em", "height": "1em", "marginRight": "0.5em"}),
+                html.Span(
+                    style={
+                        "backgroundColor": highlight_color,
+                        "display": "inline-block",
+                        "width": "1em",
+                        "height": "1em",
+                        "marginRight": "0.5em"
+                    }
+                ),
                 f"Top {top_x} nodes by {metric.replace('_',' ')}"
             ]))
-        if hasattr(global_state.viz, "set_node_colors"):
-            global_state.viz.set_node_colors(node_colors, labels)
-            fig_obj = global_state.viz.fig
+
+       
+        # if triggered == "graph-community-btn" and community_clicks:
+        #     part = ga.partition
+        #     comms = {}
+        #     for node, cid in part.items():
+        #         comms.setdefault(cid, []).append(node)
+        #     color_map = ["#e41a1c", "#377eb8","#984ea3", "#ff7f00", "#ffff33", "#a65628", "#f781bf", "#999999"]
+        #     for i, (cid, nodes) in enumerate(comms.items()):
+        #         color = color_map[i % len(color_map)]
+        #         for n in nodes:
+        #             node_colors[n] = color
+        #         legend.append(html.Div([
+        #             html.Span(style={"backgroundColor": color, "display": "inline-block", "width": "1em", "height": "1em", "marginRight": "0.5em"}),
+        #             f"Community {cid} ({len(nodes)})"
+        #         ]))
+        # else:
+        #     if metric == "in_degree":
+        #         values = {n: v["in_degree"] for n, v in node_counts.items()}
+        #     elif metric == "out_degree":
+        #         values = {n: v["out_degree"] for n, v in node_counts.items()}
+        #     elif metric == "bidirectional":
+        #         values = {n: v["bidirectional"] for n, v in node_counts.items()}
+        #     elif metric == "node_connection_strengths":
+        #         values = {n: v["in_strength"] + v["out_strength"] for n, v in node_strengths.items()}
+        #     else:
+        #         values = {n: 0 for n in node_counts}
+        #     top_nodes = sorted(values, key=values.get, reverse=True)[:top_x]
+        #     highlight_color = "#FFD700"
+        #     for n in top_nodes:
+        #         node_colors[n] = highlight_color
+        #     legend.append(html.Div([
+        #         html.Span(style={"backgroundColor": highlight_color, "display": "inline-block", "width": "1em", "height": "1em", "marginRight": "0.5em"}),
+        #         f"Top {top_x} nodes by {metric.replace('_',' ')}"
+        #     ]))
+        # if hasattr(global_state.viz, "set_node_colors"):
+        #     global_state.viz.set_node_colors(node_colors, global_state.brain_data.labels)
+        # Only call update_figure ONCE, with the correct update_type
+        print(f"Triggered by: {trigger}, determined update type: {update_type}")
+        global_state.viz.update_figure(
+            brain_data=global_state.brain_data,
+            threshold=global_state.threshold,
+            update_type=update_type,
+            node_color_map=node_colors
+        )
+        fig_obj = global_state.viz.get_figure() if hasattr(global_state.viz, 'get_figure') else global_state.viz.fig
         return fig_obj, legend
 
     def update_loc_options(sd):
@@ -471,11 +597,18 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
                     return "Please select both FC data and locations", store_data, slider_max, marks, slider_value
                 
                 bd, meta, slider = loader.build_braindata(fc_cfg, loc_cfg, is_directed)
-                
+                adj_thresh = compute_load_thresh(n_elec, n_min=1, n_max=150, t_min=0)
                 global_state.brain_data = bd
-                global_state.threshold = Threshold()
+                global_state.threshold = Threshold(threshold=adj_thresh)
                 global_state.viz = VizUIManager(bd, global_state.threshold)
-                
+                print("HERE")
+                # Provide mask if available
+                mask = None
+                if hasattr(global_state.viz, '_mask_cache'):
+                    mask = global_state.viz._mask_cache.copy()
+                    np.fill_diagonal(mask, False)
+                global_state.graph_analysis = GraphAnalysis(bd.conn_mat, bd.labels, bd.directed, threshold=adj_thresh, mask=mask)
+                print(f"Graph Analysis created, {global_state.graph_analysis}")
                 store_data["fc_meta"] = meta["fc"].__dict__
                 store_data["loc_meta"] = meta["loc"].__dict__
                 
@@ -533,339 +666,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
         
         return mode, upload_style, preset_style, simulate_style
 
-    # # ---------------------------------------------------
-    # # COMBINED DATA LOADING AND SUBMISSION CALLBACK
-    # # ---------------------------------------------------
-    # @app.callback(
-    #     Output(label_id, "children"),
-    #     Output(store_id, "data"),
-    #     Output(slider_id, "max"),
-    #     Output(slider_id, "marks"),
-    #     Output(slider_id, "value"),
-        
-    #     Input("data-submit-button", "n_clicks"),
-    #     Input(fc_upload_id, "contents"),
-    #     Input(fc_preset_id, "value"),
-    #     Input(fc_sim_nelec_id, "value"),
-    #     Input(fc_sim_nmat_id, "value"),
-    #     Input(loc_upload_id, "contents"),
-    #     Input(loc_preset_id, "value"),
-    #     Input(fc_mode_store_id, "data"),
-    #     Input(loc_mode_store_id, "data"),
-    #     Input(directed_id, "value"),
-        
-    #     State(fc_upload_id, "filename"),
-    #     State(loc_upload_id, "filename"),
-    #     State(store_id, "data"),
-    #     prevent_initial_call=False,
-    # )
-    # def load_and_submit_data(
-    #     submit_clicks,
-    #     fc_contents,
-    #     fc_preset_val,
-    #     fc_sim_nelec,
-    #     fc_sim_nmat,
-    #     loc_contents,
-    #     loc_preset_val,
-    #     fc_mode_val,
-    #     loc_mode_val,
-    #     directed_val,
-    #     fc_filename,
-    #     loc_filename,
-    #     store_data,
-    # ):
-    #     """Combined callback: update configuration and load data when submitted."""
-        
-    #     if not isinstance(store_data, dict):
-    #         store_data = {}
-        
-    #     ctx = callback_context
-    #     if not ctx.triggered:
-    #         trigger_id = None
-    #     else:
-    #         trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
-        
-    #     fc_src = fc_mode_val or "upload"
-    #     loc_src = loc_mode_val or "upload"
-        
-    #     try:
-    #         # Always update configuration
-    #         fc_cfg = loader.make_fc_cfg(
-    #             source=fc_src,
-    #             upload=(fc_contents, fc_filename),
-    #             preset=fc_preset_val,
-    #             simulate=(fc_sim_nelec, fc_sim_nmat),
-    #         )
-            
-    #         if fc_cfg["type"] == "sim":
-    #             fc_cfg["directed"] = bool(directed_val)
-            
-    #         store_data["fc_cfg"] = fc_cfg
-    #         store_data["directed"] = bool(directed_val)
-            
-    #         n_elec = fc_cfg.get("n_elec", 0)
-    #         loc_cfg = loader.make_loc_cfg(
-    #             source=loc_src,
-    #             upload=(loc_contents, loc_filename),
-    #             preset=loc_preset_val,
-    #             n_elec=n_elec,
-    #         )
-            
-    #         store_data["loc_cfg"] = loc_cfg
-            
-    #         n_mats = fc_cfg.get("n_mat", 0)
-    #         slider_max = max(0, n_mats - 1)
-    #         marks = {0: "0", slider_max: str(slider_max)} if slider_max > 0 else {0: "0"}
-    #         slider_value = 0
-            
-    #         # Check if submit was clicked
-    #         if trigger_id == "data-submit-button" and submit_clicks and submit_clicks > 0:
-    #             if not fc_cfg or not loc_cfg:
-    #                 return "Please select both FC data and locations", store_data, slider_max, marks, slider_value
-                
-    #             bd, meta, slider = loader.build_braindata(fc_cfg, loc_cfg, bool(directed_val))
-                
-    #             global_state.brain_data = bd
-    #             global_state.threshold = Threshold()
-    #             global_state.viz = VizUIManager(bd, global_state.threshold)
-                
-    #             store_data["fc_meta"] = meta["fc"].__dict__
-    #             store_data["loc_meta"] = meta["loc"].__dict__
-                
-    #             fc_name = fc_cfg.get("name", "Unknown FC")
-    #             loc_name = loc_cfg.get("name", "Unknown Locations")
-    #             label = f"✓ Loaded: {fc_name} | {loc_name}"
-                
-    #             return label, store_data, slider_max, marks, slider_value
-            
-    #         else:
-    #             fc_name = fc_cfg.get("name", "Unknown")
-    #             loc_name = loc_cfg.get("name", "Unknown")
-    #             label = f"Ready to load: {fc_name} | {loc_name}"
-                
-    #             return label, store_data, slider_max, marks, slider_value
-        
-    #     except Exception as e:
-    #         print(f"Error: {e}")
-    #         import traceback
-    #         traceback.print_exc()
-    #         return f"Error: {str(e)}", store_data, 0, {0: "0"}, 0
-
-# def register_data_callbacks(app: Dash, global_state: GlobalAppState):
-#     print("=== REGISTERING DATA CALLBACKS ===")
-#     loader = DataLoader()
-
-#     # IDs
-#     label_id = "data-dataset-label"
-#     store_id = "data-store"
-#     slider_id = "data-conn_idx-slider"
-#     error_id = "data-error-message"
-
-#     # FC mode-related IDs
-#     fc_mode_selector_id = "data-fc-mode-selector"
-#     fc_mode_store_id = "data-fc-mode-store"
-#     fc_upload_settings_id = "data-fc-upload-settings"
-#     fc_preset_settings_id = "data-fc-preset-settings"
-#     fc_simulate_settings_id = "data-fc-simulate-settings"
-
-#     # Location mode-related IDs
-#     loc_mode_selector_id = "data-loc-mode-selector"
-#     loc_mode_store_id = "data-loc-mode-store"
-#     loc_upload_settings_id = "data-loc-upload-settings"
-#     loc_preset_settings_id = "data-loc-preset-settings"
-#     loc_simulate_settings_id = "data-loc-simulate-settings"
-
-#     # Upload/Preset/Simulate IDs
-#     fc_upload_id = "data-fc-upload"
-#     fc_preset_id = "data-fc-preset-dropdown"
-#     fc_sim_nelec_id = "data-fc-sim-nelec"
-#     fc_sim_nmat_id = "data-fc-sim-nmat"
-#     directed_id = "data-directed-checkbox"
-
-#     loc_upload_id = "data-loc-upload"
-#     loc_preset_id = "data-loc-preset-dropdown"
-    
-#     print(f"FC Mode Selector ID: {fc_mode_selector_id}")
-#     print(f"FC Mode Store ID: {fc_mode_store_id}")
-#     print(f"FC Upload Settings ID: {fc_upload_settings_id}")
-
-#     # ---------------------------------------------------
-#     # ---------------------------------------------------
-#     # MODE SWITCHING CALLBACKS
-#     # ---------------------------------------------------
-#     # FC Mode switching
-#     @app.callback(
-#         Output(fc_mode_store_id, "data"),
-#         Output(fc_upload_settings_id, "style"),
-#         Output(fc_preset_settings_id, "style"),
-#         Output(fc_simulate_settings_id, "style"),
-#         Input(fc_mode_selector_id, "value"),
-#     )
-#     def switch_fc_mode(mode):
-#         """Switch between Upload, Preset, and Simulate modes for FC data."""
-#         print(f"=== FC Mode callback triggered ===")
-#         print(f"Mode value: {mode}")
-#         print(f"Mode type: {type(mode)}")
-        
-#         upload_style = {"display": "block"} if mode == "upload" else {"display": "none"}
-#         preset_style = {"display": "block"} if mode == "preset" else {"display": "none"}
-#         simulate_style ={"display": "block"} if mode == "simulate" else {"display": "none"}
-        
-#         print(f"Returning: store={mode}, upload_style={upload_style}, preset_style={preset_style}, simulate_style={simulate_style}")
-#         return mode, upload_style, preset_style, simulate_style
-
-#     # Location Mode switching
-#     @app.callback(
-#         Output(loc_mode_store_id, "data"),
-#         Output(loc_upload_settings_id, "style"),
-#         Output(loc_preset_settings_id, "style"),
-#         Output(loc_simulate_settings_id, "style"),
-#         Input(loc_mode_selector_id, "value"),
-#     )
-#     def switch_loc_mode(mode):
-#         """Switch between Upload, Preset, and Simulate modes for locations."""
-#         print(f"Location Mode switched to: {mode}")
-        
-#         upload_style = {} if mode == "upload" else {"display": "none"}
-#         preset_style = {} if mode == "preset" else {"display": "none"}
-#         simulate_style = {} if mode == "simulate" else {"display": "none"}
-        
-#         return mode, upload_style, preset_style, simulate_style
-#     # ---------------------------------------------------
-#     # DATA LOADING CALLBACK
-#     # ---------------------------------------------------
-#     @app.callback(
-#         Output(label_id, "children"),
-#         Output(store_id, "data"),
-#         Output(slider_id, "max"),
-#         Output(slider_id, "marks"),
-#         Output(slider_id, "value"),
-#         Input(fc_upload_id, "contents"),
-#         Input(fc_preset_id, "value"),
-#         Input(fc_sim_nelec_id, "value"),
-#         Input(fc_sim_nmat_id, "value"),
-#         Input(loc_upload_id, "contents"),
-#         Input(loc_preset_id, "value"),
-#         Input(fc_mode_store_id, "data"),
-#         Input(loc_mode_store_id, "data"),
-#         Input(directed_id, "value"),
-#         State(fc_upload_id, "filename"),
-#         State(loc_upload_id, "filename"),
-#         State(store_id, "data"),
-#         prevent_initial_call=False,
-#     )
-#     def load_data(
-#         fc_contents,
-#         fc_preset_val,
-#         fc_sim_nelec,
-#         fc_sim_nmat,
-#         loc_contents,
-#         loc_preset_val,
-#         fc_mode_val,
-#         loc_mode_val,
-#         directed_val,
-#         fc_filename,
-#         loc_filename,
-#         store_data,
-#     ):
-#         """Load FC and location data based on selections."""
-#         if not isinstance(store_data, dict):
-#             store_data = {}
-
-#         fc_src = fc_mode_val or "upload"
-#         loc_src = loc_mode_val or "upload"
-
-#         try:
-#             # Load FC data
-#             fc_cfg = loader.make_fc_cfg(
-#                 source=fc_src,
-#                 upload=(fc_contents, fc_filename),
-#                 preset=fc_preset_val,
-#                 simulate=(fc_sim_nelec, fc_sim_nmat),
-#             )
-            
-#             if fc_cfg["type"] == "sim":
-#                 fc_cfg["directed"] = bool(directed_val)
-            
-#             store_data["fc_cfg"] = fc_cfg
-#             store_data["directed"] = bool(directed_val)
-
-#             # Load location data
-#             n_elec = fc_cfg.get("n_elec", 0)
-#             loc_cfg = loader.make_loc_cfg(
-#                 source=loc_src,
-#                 upload=(loc_contents, loc_filename),
-#                 preset=loc_preset_val,
-#                 n_elec=n_elec,
-#             )
-            
-#             store_data["loc_cfg"] = loc_cfg
-
-#             # Create dataset label
-#             fc_name = fc_cfg.get("name", "Unknown")
-#             loc_name = loc_cfg.get("name", "Unknown")
-#             label = f"FC: {fc_name} | Locations: {loc_name}"
-            
-#             # Create slider marks
-#             n_mats = fc_cfg.get("n_mat", 0)
-#             slider_max = max(0, n_mats - 1)
-#             marks = {0: "0", slider_max: str(slider_max)} if slider_max > 0 else {0: "0"}
-#             slider_value = 0
-
-#             return label, store_data, slider_max, marks, slider_value
-
-#         except Exception as e:
-#             print(f"Error loading data: {e}")
-#             return "Error loading data", store_data, 0, {0: "0"}, 0
-
-#     # ---------------------------------------------------
-#     # SUBMIT BUTTON CALLBACK - Build and Load Data
-#     # ---------------------------------------------------
-#     @app.callback(
-#         Output(label_id, "children"),
-#         Output(store_id, "data"),
-#         Input("data-submit-button", "n_clicks"),
-#         State(store_id, "data"),
-#         prevent_initial_call=True,
-#     )
-#     def handle_submit(submit_clicks, store_data):
-#         """Build the brain data and update global state when submit is clicked."""
-#         if not isinstance(store_data, dict):
-#             store_data = {}
-
-#         fc_cfg = store_data.get("fc_cfg", {})
-#         loc_cfg = store_data.get("loc_cfg", {})
-#         directed = store_data.get("directed", False)
-
-#         # Check if we have both FC and location configs
-#         if not fc_cfg or not loc_cfg:
-#             return "Please select both FC data and locations", store_data
-
-#         try:
-#             # Build the final dataset
-#             bd, meta, slider = loader.build_braindata(fc_cfg, loc_cfg, directed)
-
-#             # Save into global_state
-#             global_state.brain_data = bd
-#             global_state.threshold = Threshold()
-#             global_state.viz = VizUIManager(bd, global_state.threshold)
-
-#             # Update store with metadata
-#             store_data["fc_meta"] = meta["fc"].__dict__
-#             store_data["loc_meta"] = meta["loc"].__dict__
-
-#             # Create success label
-#             fc_name = fc_cfg.get("name", "Unknown FC")
-#             loc_name = loc_cfg.get("name", "Unknown Locations")
-#             label = f"✓ Loaded: {fc_name} | {loc_name}"
-
-#             return label, store_data
-
-#         except Exception as e:
-#             print(f"Error building dataset: {e}")
-#             return f"Error: {str(e)}", store_data
-
-
+   
 def _map_colors_for_name(name: str):
     """Return a small color mapping (pos, neg, node) and colorscale name.
 

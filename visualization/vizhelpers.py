@@ -36,7 +36,19 @@ class Channel:
     # z is optional for 3D; if absent, zeros are assumed
     z: Optional[float] = None
 
-
+def set_node_colors(self, node_color_map: dict, labels):
+    """
+    Set node colors for the current node trace based on a mapping {label: color}.
+    Used for graph controls (metric/community shading).
+    """
+    if self.fig is None or self._node_trace_idx is None:
+        return
+    node_trace = self.fig.data[self._node_trace_idx]
+    # Map label order to color
+    colors = [node_color_map.get(l, self.node_fill) for l in labels]
+    node_trace.marker.color = colors
+    # Force redraw
+    self.fig.update()
 
 def _rgba_from_color(col: str, strength: float) -> str:
     """Return an 'rgba(r,g,b,a)' string for a given hex or named color and strength in [0,1].
@@ -282,34 +294,46 @@ def _update_edge_trace(trace, edge_weight, color, width, opacity, label1, label2
     trace.hoverinfo = "text"
     trace.text = f"{label1} → {label2}<br>Weight: {edge_weight:.3f}"
 
+# def _update_node_trace_all(
+#     trace,
+#     labels=None,
+#     size=None,
+#     color=None,
+#     # opacity=None,
+# ):
+#     """
+#     Update all nodes in the node trace.
+#     """
+#     n = len(labels)
+
+#     # Update marker arrays directly
+#     if size is not None:
+#         print(f"{size=}")
+#         trace.update(marker=dict(size=size))
+
+#     if color is not None:
+#         trace.marker.color = color
 def _update_node_trace_all(
     trace,
     labels=None,
     size=None,
-    color=None,
-    # opacity=None,
+    node_color_map=None,
+    node_fill=None,
 ):
     """
-    Update all nodes in the node trace.
+    Update all nodes in the node trace. If node_color_map is provided, use it to set node colors by label.
     """
-    n = len(labels)
+    # n = len(labels) if labels is not None else 0
 
     # Update marker arrays directly
     if size is not None:
         print(f"{size=}")
         trace.update(marker=dict(size=size))
 
-    if color is not None:
-        trace.marker.color = color
-
-    # if opacity is not None:
-    #     # print(f"updated opacity: {opacity}")
-    #     trace.opacity = opacity
-
-    # Update labels
-    # if labels is not None:
-    #     trace.text = labels
-
+    # node_fill is the default color for nodes not in node_color_map
+    if node_color_map is not None and labels is not None:
+        colors = [node_color_map.get(l, node_fill) for l in labels]
+        trace.marker.color = colors
 
 
 def _get_mat_at_idx(conn_mat: np.ndarray, idx: int) -> np.ndarray:

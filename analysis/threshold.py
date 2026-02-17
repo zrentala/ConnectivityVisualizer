@@ -130,7 +130,10 @@ def compute_stattest(
 
     return pmap, mask
 
-
+def compute_load_thresh(n_elec, n_min=1, n_max=150, t_min=0.5):
+    n_clamped = max(n_min, min(n_elec, n_max))
+    scale = (n_clamped - n_min) / (n_max - n_min)
+    return t_min + scale * (0.99 - t_min)
 
 # ============================================================
 # THRESHOLD CLASS (dispatcher only)

@@ -17,4 +17,4 @@ class GlobalAppState:
         self.brain_data = None       # No data yet
         self.threshold = None
         self.viz = None
-        # self.graph_analysis = None
+        self.graph_analysis = None

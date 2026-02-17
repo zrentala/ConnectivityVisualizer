@@ -1,40 +1,62 @@
-def create_graph_controls():
-    """Graph Controls UI: slider, radio buttons, community button, legend."""
-    shade_slider = create_slider(
-        id="graph-shade-top-x-slider",
-        data_min=1,
-        data_max=20,
-        step=1,
-        label="Shades top x for metric",
-        default=5,
+def create_graph_controls(show_controls=True, directed=True):
+    """
+    Graph Controls UI: slider, metric/community radio, legend.
+    """
+
+    if not show_controls:
+        return html.Div()
+
+    shade_slider = html.Div(
+        create_slider(
+            id="graph-shade-top-x-slider",
+            data_min=1,
+            data_max=20,
+            step=1,
+            label="Shades top x for metric",
+            default=5,
+        ),
+        id="graph-shade-top-x-container",
     )
-    metric_radio = dbc.RadioItems(
-        id="graph-metric-radio",
-        options=[
+
+    if directed:
+        metric_options = [
             {"label": "In Degree", "value": "in_degree"},
             {"label": "Out Degree", "value": "out_degree"},
             {"label": "Bidirectional Degree", "value": "bidirectional"},
             {"label": "Node Connection Strength", "value": "node_connection_strengths"},
-        ],
-        value="in_degree",
+            {"label": "Community Partition", "value": "community"},
+            {"label": "None", "value": "none"},
+        ]
+        default_metric = "in_degree"
+    else:
+        metric_options = [
+            {"label": "Degree", "value": "in_degree"},
+            {"label": "Node Connection Strength", "value": "node_connection_strengths"},
+            {"label": "Community Partition", "value": "community"},
+            {"label": "None", "value": "none"},
+        ]
+        default_metric = "in_degree"
+
+    metric_radio = dbc.RadioItems(
+        id="graph-metric-radio",
+        options=metric_options,
+        value=default_metric,
         inline=False,
         className="mb-2",
     )
-    community_btn = dbc.Button(
-        "Community Partition",
-        id="graph-community-btn",
-        color="info",
-        className="mb-2",
-        n_clicks=0,
-    )
+
     legend = html.Div(id="graph-legend", className="mt-2")
-    return html.Div([
-        html.H5("Graph Controls", className="mb-2"),
-        shade_slider,
-        metric_radio,
-        community_btn,
-        legend,
-    ], className="bg-light p-3 rounded shadow-sm mb-3")
+
+    return html.Div(
+        [
+            html.H5("Graph Controls", className="mb-2"),
+            shade_slider,
+            metric_radio,
+            legend,
+        ],
+        className="bg-light p-3 rounded shadow-sm mb-3",
+    )
+
 from dash import html, dcc
 import dash_bootstrap_components as dbc
 from dataclasses import dataclass
@@ -195,6 +217,8 @@ def create_thresh_component() -> html.Div:
         {"label":"MST", "value": "Minimum Spanning Tree"},
         {"label":"Statistical Test", "value": "Statistical Test"}
     ]
+
+
 
     thresh_dropdown = create_dropdown(
         id='thresh-thresh_type-dropdown',
@@ -358,117 +382,6 @@ def create_viz_controls() -> html.Div:
         className=container_class,
     )
 
-# def create_data_component() -> html.Div:
-#     """Create a 3-step data selection component with add/load dataset controls."""
-
-#     # Step indicator
-#     step_indicator = html.Div(id="data-step-indicator", children="Step 1: Load FC data", className="mb-2 fw-bold")
-
-#     # "+" button to open modal
-#     add_data_button = dbc.Button(
-#         "+", id="data-add_dataset-button", color="primary", size="sm", className="ms-2",
-#         title="Add or replace dataset", n_clicks=0
-#     )
-
-#     # Label showing current dataset status
-#     data_label = html.Span(
-#         id="data-dataset-label", children="No dataset loaded", className="ms-2"
-#     )
-
-#     # Modal layout
-#     data_modal = dbc.Modal(
-#         [
-#             dbc.ModalHeader("Add or replace dataset"),
-#             dbc.ModalBody(
-#                 [
-#                     # Step 1: Functional connectivity data
-#                     html.Div(
-#                         [
-#                             html.H5("Step 1: Load functional connectivity (FC) data"),
-#                             dcc.Upload(
-#                                 id="data-fc-upload",
-#                                 children=html.Div(["Drag and drop or ", html.A("select a file")]),
-#                                 multiple=False, className="border p-3 text-center mb-2",
-#                             ),
-#                             create_dropdown(
-#                                 id="data-fc-preset-dropdown",
-#                                 options=[
-#                                     {"label": "Small undirected (n=10, mats=5)", "value": "small_undirected"},
-#                                     {"label": "Medium directed (n=20, mats=10)", "value": "medium_directed"},
-#                                     {"label": "Large undirected (n=64, mats=20)", "value": "large_undirected"},
-#                                 ],
-#                                 clearable=True
-#                             ),
-#                             dbc.Button("Simulate FC data", id="data-fc-gen-btn", color="secondary", className="mt-2", n_clicks=0),
-#                         ],
-#                         id="step-1-container", className="mb-3"
-#                     ),
-                    
-#                     # Step 2: Location data
-#                     html.Div(
-#                         [
-#                             html.H5("Step 2: Load location data"),
-#                             dcc.Upload(
-#                                 id="data-loc-upload",
-#                                 children=html.Div(["Drag and drop or ", html.A("select a file")]),
-#                                 multiple=False, className="border p-3 text-center mb-2",
-#                             ),
-#                             create_dropdown(
-#                                 id="data-loc-preset-dropdown",
-#                                 options=[
-#                                     {"label": "10-channel 10-20 layout", "value": "standard_10_20"},
-#                                     {"label": "64-channel layout", "value": "standard_64"},
-#                                 ],
-#                                 clearable=True
-#                             ),
-#                             dbc.Button("Generate locations", id="data-loc-gen-btn", color="secondary", className="mt-2", n_clicks=0),
-#                         ],
-#                         id="step-2-container", className="mb-3"
-#                     ),
-                    
-#                     # Step 3: Directed/undirected
-#                     html.Div(
-#                         [
-#                             html.H5("Step 3: Directed or undirected?"),
-#                             dbc.Checkbox(id="data-directed-checkbox", value=False, className="me-2"),
-#                             html.Label("Directed"),
-#                         ],
-#                         id="step-3-container", className="mb-2"
-#                     ),
-#                 ]
-#             ),
-#             dbc.ModalFooter(
-#                 dbc.Button("Close", id="data-modal-close-button", className="ms-auto", n_clicks=0)
-#             ),
-#         ],
-#         id="data-modal",
-#         is_open=False,
-#         centered=True,
-#         backdrop="static",
-#     )
-
-#     # Store for metadata
-#     data_store = dcc.Store(id="data-store", data={"fc": {}, "loc": {}, "directed": False, 'step': 1})
-
-#     # Slider for FC matrices
-#     animation_slider = create_slider(id="data-conn_idx-slider", data_min=0, data_max=0, step=1, label="Connectivity Matrix Index", default=0)
-
-#     # Container layout
-#     return dbc.Container(
-#         [
-#             dbc.Row([dbc.Col([dbc.Label("Dataset:"), data_label, add_data_button], width="auto")], className="mb-3"),
-#             step_indicator,
-#             animation_slider,
-#             data_modal,
-#             data_store,
-#         ],
-#         fluid=True, className=container_class
-#     )
-
-# def get_loc_options():
-#     presets = PRESET_LOCS.keys()
-#     # Normal case → real selectable options
-#     return [{"label": name, "value": name} for name in presets]
 def get_loc_options():
     return [
         {
@@ -726,8 +639,18 @@ def create_data_component() -> html.Div:
         n_clicks=0,
         style={"width": "100%"},
     )
-    return html.Div([
-        toggle_btn,
+    return dbc.Card(
+            [
+                # Header (stable)
+                dbc.CardHeader(
+                    html.Div(
+                        [
+                            html.H5("Load Data", className="mb-0"),
+                            toggle_btn,
+                        ],
+                        className="d-flex justify-content-between align-items-center",
+                    )
+                ),
         dbc.Collapse(
             html.Div(
                 id="data-loader-container",

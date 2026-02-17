@@ -133,7 +133,7 @@ class VizUIManager:
     # ------------------------------------------------------------------
     # Update figure in place (fast)
     # ------------------------------------------------------------------
-    def update_figure(self, brain_data: BrainData, threshold: Threshold, update_type: UpdateType):
+    def update_figure(self, brain_data: BrainData, threshold: Threshold, update_type: UpdateType, node_color_map=None, node_fill=None):
         old_mask = self._mask_cache
         C, new_mask = threshold.apply_threshold(brain_data.conn_mat, self.conn_idx)
         self._mask_cache = new_mask.copy()
@@ -146,38 +146,44 @@ class VizUIManager:
 
         if self.viz_type == VizType.FIG2D:
             self.viz_dict[self.viz_type].update_figure(
-            C=C,
-            labels=brain_data.labels,
-            directed=brain_data.directed,
-            update_type=update_type,
-            new_thresh_mask=new_mask,
-            old_thresh_mask=old_mask,
-            color_scale_info=color_scale_info,
-            # title=title
-        )
+                C=C,
+                labels=brain_data.labels,
+                directed=brain_data.directed,
+                update_type=update_type,
+                new_thresh_mask=new_mask,
+                old_thresh_mask=old_mask,
+                color_scale_info=color_scale_info,
+                node_color_map=node_color_map,
+                node_fill=node_fill,
+                # title=title
+            )
         elif self.viz_type == VizType.FIG3D:
             self.viz_dict[self.viz_type].update_figure(
-            C=C,
-            labels=brain_data.labels,
-            directed=brain_data.directed,
-            update_type=update_type,
-            new_thresh_mask=new_mask,
-            old_thresh_mask=old_mask,
-            color_scale_info=color_scale_info,
-            brain_mesh=brain_data.brain_mesh,
-            # title=title
-        )
+                C=C,
+                labels=brain_data.labels,
+                directed=brain_data.directed,
+                update_type=update_type,
+                new_thresh_mask=new_mask,
+                old_thresh_mask=old_mask,
+                color_scale_info=color_scale_info,
+                brain_mesh=brain_data.brain_mesh,
+                node_color_map=node_color_map,
+                node_fill=node_fill,
+                # title=title
+            )
         elif self.viz_type == VizType.FIGHEATMAP:
             self.viz_dict[self.viz_type].update_figure(
-            C=C,
-            labels=brain_data.labels,
-            directed=brain_data.directed,
-            update_type=update_type,
-            new_thresh_mask=new_mask,
-            old_thresh_mask=old_mask,
-            color_scale_info=color_scale_info,
-            # title=title
-        )
+                C=C,
+                labels=brain_data.labels,
+                directed=brain_data.directed,
+                update_type=update_type,
+                new_thresh_mask=new_mask,
+                old_thresh_mask=old_mask,
+                color_scale_info=color_scale_info,
+                node_color_map=node_color_map,
+                node_fill=node_fill,
+                # title=title
+            )
 
     # ------------------------------------------------------------------
     def get_figure(self) -> go.Figure:
