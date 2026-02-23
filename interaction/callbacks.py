@@ -93,11 +93,9 @@ def determine_update_type_from_trigger(trigger_id: str) -> UpdateType:
         return UpdateType.VISIBLE
 
     # Switching figures (2D <-> 3D)
-    if trigger_id == "viz-fig_type-dropdown":
-        return UpdateType.ALL
-
-    # Frame change
-    if trigger_id == "data-conn_idx-slider":
+    if trigger_id in {"viz-fig_type-dropdown", "data-conn_idx-slider",  "thresh-thresh_type-dropdown",
+        "thresh-percent-slider",
+        "thresh-stat-alpha-slider",}:
         return UpdateType.ALL
 
     # # Hemi toggles
@@ -109,6 +107,7 @@ def determine_update_type_from_trigger(trigger_id: str) -> UpdateType:
 
     # Default fallback
     return UpdateType.NONE
+
 
 def register_visualization_callback(app: Dash, global_state: GlobalAppState):
     @app.callback(
@@ -144,27 +143,33 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         # Always recalculate GraphAnalysis with current threshold and conn_idx
         conn_idx = global_state.viz.conn_idx if hasattr(global_state.viz, 'conn_idx') else 0
         threshold = getattr(global_state.threshold, 'threshold', None)
-        mask = global_state.viz._mask_cache.copy()
-        np.fill_diagonal(mask, False)
-        ga = GraphAnalysis(
-            global_state.brain_data.conn_mat,
-            global_state.brain_data.labels,
-            global_state.brain_data.directed,
-            mat_idx=conn_idx,
-            threshold=threshold,
-            mask=mask,
-        )
+        
+        # Recompute GraphAnalysis only if needed
+        trigger = callback_context.triggered[0]["prop_id"].split(".")[0]
+        update_type = determine_update_type_from_trigger(trigger)
+        if (
+            global_state.graph_analysis is None
+            or update_type in {UpdateType.THRESHOLD, UpdateType.ALL}
+            or conn_idx != getattr(global_state.graph_analysis, "mat_idx", None)
+        ):
+            mask = global_state.viz._mask_cache.copy()
+            np.fill_diagonal(mask, False)
+
+            ga = GraphAnalysis(
+                global_state.brain_data.conn_mat,
+                global_state.brain_data.labels,
+                global_state.brain_data.directed,
+                mat_idx=conn_idx,
+                mask=mask,
+            )
+
+            global_state.graph_analysis = ga
+        else:
+            ga = global_state.graph_analysis
         G = ga.graph
         n_nodes = ga.num_nodes
         total_edges = ga.total_num_edges
         visible_edges = ga.visible_num_edges
-        # Visible edges: count nonzero edges in mask
-        mask = global_state.viz._mask_cache.copy()
-        np.fill_diagonal(mask, False)
-        # if global_state.brain_data.directed:
-        #     visible_edges = int(mask.sum())
-        # else:
-        #     visible_edges = int(np.triu(mask, k=1).sum())
         dens = ga.density
         g_eff = ga.global_eff
         l_eff = ga.local_eff
@@ -261,14 +266,34 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
         update_type = determine_update_type_from_trigger(trigger)
         update_attributes(global_state.threshold, **threshold_updates)
         global_state.viz.update_attributes(viz_updates=viz_updates)
-        ga = global_state.graph_analysis
+                # Ensure GraphAnalysis is up to date
+        mask = global_state.viz._mask_cache.copy()
+        np.fill_diagonal(mask, False)
+
+        if (
+            global_state.graph_analysis is None
+            or update_type in {UpdateType.THRESHOLD, UpdateType.ALL}
+            or conn_idx != getattr(global_state.graph_analysis, "mat_idx", None)
+        ):
+            mask = global_state.viz._mask_cache.copy()
+            np.fill_diagonal(mask, False)
+
+            ga = GraphAnalysis(
+                global_state.brain_data.conn_mat,
+                global_state.brain_data.labels,
+                global_state.brain_data.directed,
+                mat_idx=conn_idx,
+                mask=mask,
+            )
+
+            global_state.graph_analysis = ga
+        else:
+            ga = global_state.graph_analysis
         G = ga.graph
         node_counts = ga.node_degrees
         node_strengths = ga.node_strengths
         node_colors = {}
         legend = []
-        ctx = callback_context
-        triggered = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
         # Set node colors and legend before update_figure
         values = get_metric_values(ga, metric)
 
@@ -327,44 +352,6 @@ def register_visualization_callback(app: Dash, global_state: GlobalAppState):
                 ),
                 f"Top {top_x} nodes by {metric.replace('_',' ')}"
             ]))
-
-       
-        # if triggered == "graph-community-btn" and community_clicks:
-        #     part = ga.partition
-        #     comms = {}
-        #     for node, cid in part.items():
-        #         comms.setdefault(cid, []).append(node)
-        #     color_map = ["#e41a1c", "#377eb8","#984ea3", "#ff7f00", "#ffff33", "#a65628", "#f781bf", "#999999"]
-        #     for i, (cid, nodes) in enumerate(comms.items()):
-        #         color = color_map[i % len(color_map)]
-        #         for n in nodes:
-        #             node_colors[n] = color
-        #         legend.append(html.Div([
-        #             html.Span(style={"backgroundColor": color, "display": "inline-block", "width": "1em", "height": "1em", "marginRight": "0.5em"}),
-        #             f"Community {cid} ({len(nodes)})"
-        #         ]))
-        # else:
-        #     if metric == "in_degree":
-        #         values = {n: v["in_degree"] for n, v in node_counts.items()}
-        #     elif metric == "out_degree":
-        #         values = {n: v["out_degree"] for n, v in node_counts.items()}
-        #     elif metric == "bidirectional":
-        #         values = {n: v["bidirectional"] for n, v in node_counts.items()}
-        #     elif metric == "node_connection_strengths":
-        #         values = {n: v["in_strength"] + v["out_strength"] for n, v in node_strengths.items()}
-        #     else:
-        #         values = {n: 0 for n in node_counts}
-        #     top_nodes = sorted(values, key=values.get, reverse=True)[:top_x]
-        #     highlight_color = "#FFD700"
-        #     for n in top_nodes:
-        #         node_colors[n] = highlight_color
-        #     legend.append(html.Div([
-        #         html.Span(style={"backgroundColor": highlight_color, "display": "inline-block", "width": "1em", "height": "1em", "marginRight": "0.5em"}),
-        #         f"Top {top_x} nodes by {metric.replace('_',' ')}"
-        #     ]))
-        # if hasattr(global_state.viz, "set_node_colors"):
-        #     global_state.viz.set_node_colors(node_colors, global_state.brain_data.labels)
-        # Only call update_figure ONCE, with the correct update_type
         print(f"Triggered by: {trigger}, determined update type: {update_type}")
         global_state.viz.update_figure(
             brain_data=global_state.brain_data,
@@ -607,7 +594,7 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
                 if hasattr(global_state.viz, '_mask_cache'):
                     mask = global_state.viz._mask_cache.copy()
                     np.fill_diagonal(mask, False)
-                global_state.graph_analysis = GraphAnalysis(bd.conn_mat, bd.labels, bd.directed, threshold=adj_thresh, mask=mask)
+                global_state.graph_analysis = GraphAnalysis(bd.conn_mat, bd.labels, bd.directed, mask=mask)
                 print(f"Graph Analysis created, {global_state.graph_analysis}")
                 store_data["fc_meta"] = meta["fc"].__dict__
                 store_data["loc_meta"] = meta["loc"].__dict__

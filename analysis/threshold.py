@@ -18,16 +18,6 @@ from scipy.stats import (
     wilcoxon,
 )
 
-
-# ============================================================
-# BASIC MASKS (module-level)
-# ============================================================
-
-def basic_mask(conn_norm: np.ndarray, thr: float) -> np.ndarray:
-    """Mask for normalized connectivity >= threshold."""
-    return (conn_norm >= thr).astype(bool)
-
-
 def mst_mask(conn_norm: np.ndarray) -> np.ndarray:
     """Maximum spanning tree mask from normalized connectivity matrix."""
     mst = minimum_spanning_tree(-conn_norm)
@@ -186,8 +176,12 @@ class Threshold:
         # BASIC THRESHOLD
         # -------------------------
         if ttype == "basic":
-            thr = self.threshold / 100.0
-            mask = basic_mask(conn_norm, thr)
+            percent = self.threshold  # 0–100
+
+            flat = np.abs(C.flatten())
+            cutoff = np.percentile(flat, percent)
+
+            mask = np.abs(C) >= cutoff
             return C * mask, mask
 
         # -------------------------

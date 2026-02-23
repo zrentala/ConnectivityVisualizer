@@ -224,6 +224,8 @@ class ConnectivityViewHeatmap(ConnectivityView):
         color_scale_info,
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
+        node_color_map=None,
+        node_fill=None,
         title=None,
     ) -> go.Figure:
         fig = self.fig
@@ -246,6 +248,15 @@ class ConnectivityViewHeatmap(ConnectivityView):
             colorscale=colorscale,
             selector=dict(name="main"),
         )
+        # --- Color axis tick labels ---
+        if labels is not None:
+            colored_labels = [
+                f"<span style='color:{(node_color_map or {}).get(l, 'black')}'>{l}</span>"
+                for l in labels
+            ]
+
+            fig.update_xaxes(tickmode="array", tickvals=labels, ticktext=colored_labels)
+            fig.update_yaxes(tickmode="array", tickvals=labels, ticktext=colored_labels)
 
         # helpers._update_title(fig=fig, title=title)
         self.fig = fig
@@ -563,7 +574,7 @@ class ConnectivityView2D(ConnectivityView, HandlesNodes):
                 self.fig = fig
                 return fig
 
-            if update_type == UpdateType.ALL:
+            if update_type in {UpdateType.ALL, UpdateType.THRESHOLD}:
                 node_trace = fig.data[self._node_trace_idx]
                 helpers._update_node_trace_all(
                     trace=node_trace,
@@ -1052,6 +1063,8 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
         new_thresh_mask: Optional[np.ndarray],
         old_thresh_mask: Optional[np.ndarray],
         brain_mesh: Optional[pv.PolyData],
+        node_color_map=None,
+        node_fill = None,
         title=None,
     ) -> go.Figure:
         scale, data_min, data_max, zmin, zmax, colorscale = color_scale_info
@@ -1089,14 +1102,14 @@ class ConnectivityView3D(ConnectivityView, HandlesNodes):
                 self.fig = fig
                 return fig
             
-            if update_type == UpdateType.ALL:
+            if update_type in {UpdateType.ALL, UpdateType.THRESHOLD}:
                 node_trace = fig.data[self._node_trace_idx]
 
                 helpers._update_node_trace_all(
                     trace=node_trace,
                     labels=labels,
                     size=self.node_size * 0.5,
-                    color=self.node_fill,
+                    node_fill=self.node_fill,
                     # opacity=self.node_opacity
                 )
 

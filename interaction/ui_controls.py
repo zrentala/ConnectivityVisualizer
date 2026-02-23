@@ -279,7 +279,7 @@ def create_2d_options() -> html.Div:
     )
 
 def create_3d_options() -> html.Div:
-    brain_mesh_opacity_slider = create_slider(id="viz-3d-brain_mesh_opacity-slider", data_min=0, data_max=1, step=0.01, label="Brain Mesh Opacity (%)")
+    brain_mesh_opacity_slider = create_slider(id="viz-3d-brain_mesh_opacity-slider", data_min=0, data_max=1, step=0.01, label="Brain Mesh Opacity (%)", default=1.0)
 
     hemisphere_row = dbc.Row(
         [

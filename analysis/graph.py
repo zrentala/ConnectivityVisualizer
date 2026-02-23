@@ -1,4 +1,3 @@
-
 import numpy as np
 import networkx as nx
 import community.community_louvain as community_louvain  # python-louvain
@@ -16,7 +15,6 @@ class GraphAnalysis:
         directed: bool = False,
         mat_idx: int = 0,
         agg: str | None = None,
-        threshold: float | None = None,
         mask: np.ndarray | None = None,
     ):
         self.conn_mat = conn_mat
@@ -24,7 +22,6 @@ class GraphAnalysis:
         self.directed = directed
         self.mat_idx = mat_idx
         self.agg = agg
-        self.threshold = threshold
 
         self.mask = mask
 
@@ -61,19 +58,23 @@ class GraphAnalysis:
 
     def _build_graph_and_metrics(self):
         W = self._get_weight_matrix()
-        if self.threshold is not None:
-            W = W.copy()
-            W[np.abs(W) < self.threshold] = 0.0
-            print(f"Applied threshold: {self.threshold}, resulting in {np.sum(W != 0)} edges")
+
+        # Apply mask if provided
+        if self.mask is not None:
+            W = W * self.mask
+
         G = nx.DiGraph() if self.directed else nx.Graph()
         G.add_nodes_from(self.elec_names)
+
         for i, src in enumerate(self.elec_names):
             for j, dst in enumerate(self.elec_names):
                 if i == j:
                     continue
+
                 w = W[i, j]
                 if not np.isnan(w) and w != 0:
                     G.add_edge(src, dst, weight=float(w))
+
         self._graph = G
         self._compute_metrics()
 
@@ -222,22 +223,22 @@ class GraphAnalysis:
         print(f"  Local Efficiency: {self.local_eff:.4f}")
         print(f"  Modularity: {self.modularity:.4f}")
 
-        if self.threshold is not None:
-            W = W.copy()
-            W[np.abs(W) < self.threshold] = 0.0
+        # if self.threshold is not None:
+        #     W = W.copy()
+        #     W[np.abs(W) < self.threshold] = 0.0
 
-        G = nx.DiGraph() if self.directed else nx.Graph()
-        G.add_nodes_from(self.elec_names)
+        # G = nx.DiGraph() if self.directed else nx.Graph()
+        # G.add_nodes_from(self.elec_names)
 
-        for i, src in enumerate(self.elec_names):
-            for j, dst in enumerate(self.elec_names):
-                if i == j:
-                    continue
-                w = W[i, j]
-                if not np.isnan(w) and w != 0:
-                    G.add_edge(src, dst, weight=float(w))
+        # for i, src in enumerate(self.elec_names):
+        #     for j, dst in enumerate(self.elec_names):
+        #         if i == j:
+        #             continue
+        #         w = W[i, j]
+        #         if not np.isnan(w) and w != 0:
+        #             G.add_edge(src, dst, weight=float(w))
 
-        self._graph = G
+        # self._graph = G
 
     # -----------------------------
     # expose cached graph
