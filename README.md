@@ -3,7 +3,7 @@ title: ConnectivityVisualizer
 emoji: 🧠
 colorFrom: indigo
 colorTo: blue
-sdk: python
+sdk: docker
 sdk_version: "1.0"
 app_file: app.py
 pinned: true
