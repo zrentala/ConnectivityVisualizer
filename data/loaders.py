@@ -390,6 +390,7 @@ class DataLoader:
 
 
 def decode_uploaded(contents, filename):
+    import io
     content_type, b64data = contents.split(',')
     raw = base64.b64decode(b64data)
     buf = io.BytesIO(raw)
@@ -413,35 +414,73 @@ def load_conn_mat_sim(cfg):
 
 ##  from input
 # ---------------------------
-def load_connectivity(path: str | Path) -> np.ndarray:
-    """Load connectivity matrix from .npy, .npz, .csv, or .mat"""
-    path = Path(path)
+def load_connectivity(source) -> np.ndarray:
+    """
+    Load connectivity matrix from:
+    - file path (.npy, .npz, .csv, .mat)
+    - file-like object (BytesIO)
+    """
+
+    # ---------------------------------------------------
+    # If it's a file-like object (Dash upload)
+    # ---------------------------------------------------
+    if hasattr(source, "read"):
+        name = getattr(source, "name", "")
+        ext = Path(name).suffix.lower()
+
+        if ext == ".npy":
+            return np.load(source)
+
+        elif ext == ".npz":
+            data = np.load(source)
+            if "conn" in data:
+                return data["conn"]
+            for key in data:
+                if isinstance(data[key], np.ndarray):
+                    return data[key]
+            raise KeyError("No valid array found in .npz file.")
+
+        elif ext == ".csv":
+            source.seek(0)
+            arr = np.loadtxt(source, delimiter=",")
+            if arr.ndim == 2:
+                return arr[np.newaxis, ...]
+            return arr
+
+        elif ext == ".mat":
+            data = loadmat(source)
+            for key, val in data.items():
+                if not key.startswith("__") and isinstance(val, np.ndarray):
+                    return val
+            raise KeyError("No valid matrix found in .mat file.")
+
+        else:
+            raise ValueError(f"Unsupported file type: {ext}")
+
+    # ---------------------------------------------------
+    # Otherwise assume it's a path
+    # ---------------------------------------------------
+    path = Path(source)
     ext = path.suffix.lower()
 
-    # -------- .npy --------
     if ext == ".npy":
         return np.load(path)
 
-    # -------- .npz --------
     elif ext == ".npz":
         data = np.load(path)
         if "conn" in data:
             return data["conn"]
-        # fallback: return first ndarray
         for key in data:
             if isinstance(data[key], np.ndarray):
                 return data[key]
         raise KeyError("No valid array found in .npz file.")
 
-    # -------- .csv --------
     elif ext == ".csv":
         arr = np.loadtxt(path, delimiter=",")
-        # If it's a flat 2D matrix, wrap into (1, n, n)
         if arr.ndim == 2:
             return arr[np.newaxis, ...]
         return arr
 
-    # -------- .mat --------
     elif ext == ".mat":
         data = loadmat(path)
         for key, val in data.items():
@@ -477,28 +516,77 @@ def load_locs_simulated(sim: Simulation):
     return locs_dict_to_dataframe(pos)
 
 
-def load_locs_input(path):
-    path = str(path).lower()
+def load_locs_input(source):
+    """
+    Load channel locations from:
+    - file path
+    - file-like object (BytesIO from Dash upload)
+    """
 
-    # ---------------------------
-    # EEG/standard montage formats
-    # ---------------------------
-    if path.endswith(".set"):
+    # ----------------------------------------------------
+    # If it's a file-like object
+    # ----------------------------------------------------
+    if hasattr(source, "read"):
+        name = getattr(source, "name", "")
+        ext = Path(name).suffix.lower()
+
+        # CSV / TXT
+        if ext in (".csv", ".txt"):
+            source.seek(0)
+            df = pd.read_csv(source)
+
+            required = {"label", "x", "y", "z"}
+            if not required.issubset(df.columns):
+                raise ValueError(
+                    f"CSV must contain columns: {required}, but has: {set(df.columns)}"
+                )
+
+            return df
+
+        # MNE-supported raw formats
+        elif ext == ".set":
+            raw = mne.io.read_raw_eeglab(source, preload=False)
+            montage = raw.get_montage()
+
+        elif ext == ".vhdr":
+            raw = mne.io.read_raw_brainvision(source, preload=False)
+            montage = raw.get_montage()
+
+        elif ext in (".bdf", ".edf"):
+            raw = mne.io.read_raw(source, preload=False)
+            montage = raw.get_montage()
+
+        elif ext in (".ced", ".locs", ".elc", ".elp", ".sfp"):
+            montage = mne.channels.read_custom_montage(source)
+
+        else:
+            raise ValueError(f"Unsupported channel location format: {ext}")
+
+        pos = montage.get_positions()["ch_pos"]
+        return locs_dict_to_dataframe(pos)
+
+    # ----------------------------------------------------
+    # Otherwise assume it's a file path
+    # ----------------------------------------------------
+    path = Path(source)
+    ext = path.suffix.lower()
+
+    if ext == ".set":
         raw = mne.io.read_raw_eeglab(path, preload=False)
         montage = raw.get_montage()
 
-    elif path.endswith(".vhdr"):
+    elif ext == ".vhdr":
         raw = mne.io.read_raw_brainvision(path, preload=False)
         montage = raw.get_montage()
 
-    elif path.endswith((".bdf", ".edf")):
+    elif ext in (".bdf", ".edf"):
         raw = mne.io.read_raw(path, preload=False)
         montage = raw.get_montage()
 
-    # ---------------------------
-    # CSV / TXT custom coordinates
-    # ---------------------------
-    elif path.endswith((".csv", ".txt")):
+    elif ext in (".ced", ".locs", ".elc", ".elp", ".sfp"):
+        montage = mne.channels.read_custom_montage(path)
+
+    elif ext in (".csv", ".txt"):
         df = pd.read_csv(path)
 
         required = {"label", "x", "y", "z"}
@@ -507,25 +595,10 @@ def load_locs_input(path):
                 f"CSV must contain columns: {required}, but has: {set(df.columns)}"
             )
 
-        # Convert DataFrame → dict({label: [x,y,z]})
-        pos = {
-            row["label"]: np.array([row["x"], row["y"], row["z"]], dtype=float)
-            for _, row in df.iterrows()
-        }
-
-        return locs_dict_to_dataframe(pos)
-
-    # ---------------------------
-    # Other montage files (ced, locs, elc, etc.)
-    # ---------------------------
-    elif path.endswith((".ced", ".locs", ".elc", ".elp", ".sfp")):
-        montage = mne.channels.read_custom_montage(path)
+        return df
 
     else:
-        raise ValueError(f"Unsupported channel location format: {path}")
+        raise ValueError(f"Unsupported channel location format: {ext}")
 
-    # --------------------------------------------------------
-    # Extract MNE montage → dictionary → DataFrame conversion
-    # --------------------------------------------------------
-    pos = montage.get_positions()["ch_pos"]  # {label: np.array([x,y,z])}
+    pos = montage.get_positions()["ch_pos"]
     return locs_dict_to_dataframe(pos)

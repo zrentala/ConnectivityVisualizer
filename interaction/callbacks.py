@@ -584,11 +584,10 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
                     return "Please select both FC data and locations", store_data, slider_max, marks, slider_value
                 
                 bd, meta, slider = loader.build_braindata(fc_cfg, loc_cfg, is_directed)
-                adj_thresh = compute_load_thresh(n_elec, n_min=1, n_max=150, t_min=0)
+                adj_thresh = compute_load_thresh(n_elec, n_min=1, n_max=80, t_min=0)
                 global_state.brain_data = bd
                 global_state.threshold = Threshold(threshold=adj_thresh)
                 global_state.viz = VizUIManager(bd, global_state.threshold)
-                print("HERE")
                 # Provide mask if available
                 mask = None
                 if hasattr(global_state.viz, '_mask_cache'):
@@ -652,6 +651,47 @@ def register_data_callbacks(app: Dash, global_state: GlobalAppState):
         simulate_style = {"display": "block"} if mode == "simulate" else {"display": "none"}
         
         return mode, upload_style, preset_style, simulate_style
+    
+    @app.callback(
+        Output(fc_upload_id, "children"),
+        Output(fc_upload_id, "style"),
+        Input(fc_upload_id, "contents"),
+        State(fc_upload_id, "filename"),
+    )
+    def update_fc_upload_label(contents, filename):
+        base_style = {
+            "borderWidth": "1px",
+            "borderStyle": "dashed",
+            "borderRadius": "8px",
+            "padding": "20px",
+            "textAlign": "center",
+        }
+
+        if contents is not None:
+            style = base_style | {"border": "2px solid #28a745"}
+            return f"Loaded: {filename} — drag to replace", style
+
+        return "Drag and drop or click to upload FC file", base_style
+    @app.callback(
+        Output(loc_upload_id, "children"),
+        Output(loc_upload_id, "style"),
+        Input(loc_upload_id, "contents"),
+        State(loc_upload_id, "filename"),
+    )
+    def update_loc_upload_label(contents, filename):
+        base_style = {
+            "borderWidth": "1px",
+            "borderStyle": "dashed",
+            "borderRadius": "8px",
+            "padding": "20px",
+            "textAlign": "center",
+        }
+
+        if contents is not None:
+            style = base_style | {"border": "2px solid #28a745"}
+            return f"Loaded: {filename} — drag to replace", style
+
+        return "Drag and drop or click to upload location file", base_style
 
    
 def _map_colors_for_name(name: str):
