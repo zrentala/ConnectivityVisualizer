@@ -49,7 +49,6 @@ def create_graph_controls(show_controls=True, directed=True):
 
     return html.Div(
         [
-            html.H5("Graph Controls", className="mb-2"),
             shade_slider,
             metric_radio,
             legend,
