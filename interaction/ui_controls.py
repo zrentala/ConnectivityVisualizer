@@ -104,7 +104,7 @@ PRESET_LOCS: Dict[str, int] = {
 }
 
 
-container_class = "p-3 my-3 rounded shadow-sm border border-dark"
+container_class = "p-3 my-3 rounded shadow-sm"
 
 ID_LIST= [
     'thresh-stat-alpha-slider',
